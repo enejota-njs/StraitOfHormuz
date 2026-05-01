@@ -114,7 +114,7 @@ func main() {
 	address := "localhost:7001"
 
 	typeSensor, longitudeSensor := register()
-	
+
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		fmt.Println("Erro ao conectar com broker: ", err)
