@@ -53,9 +53,13 @@ func receiveSensor(decoder *json.Decoder, sensor *Sensor) error {
 	return nil
 }
 
+func
+
 func requestDrone(sensor Sensor) {
 
 }
+
+// == SENSOR
 
 func handleSensor(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
@@ -63,7 +67,7 @@ func handleSensor(conn net.Conn) {
 	for {
 		var sensor Sensor
 		if receiveSensor(decoder, &sensor) != nil {
-			conn.Close()
+			return
 		}
 
 		if sensor.IsActive {
@@ -84,7 +88,7 @@ func listenSensor() {
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println("Erro ao se conectar com sensor: ", err)
-			return
+			continue
 		}
 
 		go handleSensor(conn)
@@ -163,9 +167,9 @@ func handleSector(conn net.Conn) {
 }
 
 func listenSector() {
-	listener, err := net.Listen("tcp", ":8000")
+	listener, err := net.Listen("tcp", ":7000")
 	if err != nil {
-		fmt.Println("Erro ao iniciar servidor: ", err)
+		fmt.Println("Erro ao iniciar porta 7000: ", err)
 		return
 	}
 	defer listener.Close()
@@ -181,11 +185,17 @@ func listenSector() {
 	}
 }
 
+func register() {
+
+}
+
 func main() {
 	if len(os.Args) < 5 {
 		return
 	}
 
 	go listenSector()
+	go listenSensor()
+
 	go checkSector(os.Args)
 }
