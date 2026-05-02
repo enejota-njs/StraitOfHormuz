@@ -182,6 +182,8 @@ func listenSensor() {
 	}
 	defer listener.Close()
 
+	fmt.Println("Servidor (sensor) inicializado")
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -365,6 +367,8 @@ func main() {
 		YTop:   100,
 		YLow:   0,
 	}
+
+	drones = append(drones, "localhost:7500")
 
 	go listenSensor()
 

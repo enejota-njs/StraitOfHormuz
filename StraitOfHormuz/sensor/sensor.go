@@ -28,6 +28,7 @@ var (
 	sensors = []string{
 		"Radar costeiro",
 	}
+	mu sync.Mutex
 )
 
 func sendSensor(encoder *json.Encoder, sensor Sensor) error {
@@ -41,27 +42,26 @@ func sendSensor(encoder *json.Encoder, sensor Sensor) error {
 	return nil
 }
 
-func monitoring(isActive, isCritical *bool, mu *sync.Mutex) {
+func monitoring() {
 	for {
 		r := rand.Float64()
+		fmt.Println(r)
 		mu.Lock()
 
-		*isActive = r > 0.5
-		*isCritical = r > 0.7
-
+		sensor.IsActive = r > 0.5
+		sensor.IsCritical = r > 0.7
+		fmt.Println(sensor)
 		mu.Unlock()
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 
-func communication(conn net.Conn, mu *sync.Mutex, isActiveSensor, isCriticalSensor bool) {
+func communication(conn net.Conn) {
 	encoder := json.NewEncoder(conn)
 
 	for {
 		mu.Lock()
-		sensor.IsActive = isActiveSensor
-		sensor.IsCritical = isCriticalSensor
 		currentSensor := sensor
 		mu.Unlock()
 
@@ -176,15 +176,12 @@ func main() {
 
 	conn, err := net.DialTimeout("tcp", "localhost:9000", 2*time.Second)
 	if err != nil {
-		fmt.Println("Erro ao conectar com broker: ", err)
+		fmt.Println("Erro ao conectar com setor: ", err)
 		return
 	}
 
-	var mu sync.Mutex
-	var isActiveSensor, isCriticalSensor bool
-
-	go monitoring(&isActiveSensor, &isCriticalSensor, &mu)
-	go communication(conn, &mu, isActiveSensor, isCriticalSensor)
+	go monitoring()
+	go communication(conn)
 
 	select {}
 }

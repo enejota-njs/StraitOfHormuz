@@ -157,6 +157,13 @@ func main() {
 
 	go listenSector()
 
+	go func() {
+		for {
+			fmt.Println(drone)
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
 	select {}
 }
 
