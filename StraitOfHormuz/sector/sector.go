@@ -1,23 +1,59 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
 type Sensor struct {
-	Type       string `json:"type"`
-	Longitude  int    `json:"longitude"`
-	IsActive   bool   `json:"is_active"`
-	IsCritical bool   `json:"is_critical"`
+	Type       string  `json:"type"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	IsActive   bool    `json:"is_active"`
+	IsCritical bool    `json:"is_critical"`
+}
+
+type Drone struct {
+	ID        int     `json:"id"`
+	Longitude float64 `json:"longitude"`
+	IsBusy    bool    `json:"is_busy"`
+	IsOn      bool    `json:"is_on"`
+}
+
+type Command struct {
+	Type       string  `json:"type"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	IsCritical bool    `json:"is_critical"`
 }
 
 type Sector struct {
-	LonMin float64 `json:"lon_min"`
-	LonMax float64 `json:"lon_max"`
+	XLeft  float64 `json:"x_left"`
+	XRight float64 `json:"x_right"`
+	YTop   float64 `json:"y_top"`
+	YLow   float64 `json:"y_low"`
+}
+
+var (
+	sector Sector
+	drones []string
+)
+
+func sendCommand(encoder *json.Encoder, command Command) error {
+	err := encoder.Encode(command)
+
+	if err != nil {
+		fmt.Println("Erro ao enviar comando: ", err)
+		return err
+	}
+
+	return nil
 }
 
 func sendMessage(encoder *json.Encoder, message string) error {
@@ -25,6 +61,17 @@ func sendMessage(encoder *json.Encoder, message string) error {
 
 	if err != nil {
 		fmt.Println("Erro ao enviar mensagem: ", err)
+		return err
+	}
+
+	return nil
+}
+
+func sendSensor(encoder *json.Encoder, sensor Sensor) error {
+	err := encoder.Encode(sensor)
+
+	if err != nil {
+		fmt.Println("Erro ao enviar sensor: ", err)
 		return err
 	}
 
@@ -53,33 +100,84 @@ func receiveSensor(decoder *json.Decoder, sensor *Sensor) error {
 	return nil
 }
 
-func
+// == DRONE
 
 func requestDrone(sensor Sensor) {
+	for _, address := range drones {
+		conn, err := net.DialTimeout("tcp", address, 2*time.Second)
+		if err != nil {
+			fmt.Println("Drone indisponível:", address)
+			continue
+		}
 
+		encoder := json.NewEncoder(conn)
+		decoder := json.NewDecoder(conn)
+
+		command := Command{
+			Type:       "REQUEST",
+			X:          sensor.X,
+			Y:          sensor.Y,
+			IsCritical: sensor.IsCritical,
+		}
+
+		if sendCommand(encoder, command) != nil {
+			fmt.Println("Drone indisponível:", address)
+			conn.Close()
+			continue
+		}
+
+		var response string
+
+		if receiveMessage(decoder, &response) != nil {
+			fmt.Println("Drone indisponível:", address)
+			conn.Close()
+			continue
+		}
+
+		if response == "SERVING" {
+			fmt.Println("Drone atendendo solicitação: ", address)
+		}
+
+		if receiveMessage(decoder, &response) != nil {
+			fmt.Println("Drone indisponível:", address)
+			conn.Close()
+			continue
+		}
+
+		if response == "FINISHED" {
+			fmt.Println("Drone finalizou solicitação: ", address)
+			conn.Close()
+			return
+		}
+
+		conn.Close()
+	}
+
+	fmt.Println("Nenhum drone aceitou a missão")
 }
 
 // == SENSOR
 
 func handleSensor(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
+	var sensor Sensor
 
 	for {
-		var sensor Sensor
 		if receiveSensor(decoder, &sensor) != nil {
+			conn.Close()
 			return
 		}
 
 		if sensor.IsActive {
-			requestDrone(sensor)
+			go requestDrone(sensor)
 		}
 	}
 }
 
 func listenSensor() {
-	listener, err := net.Listen("tcp", "localhost:8000")
+	listener, err := net.Listen("tcp", "localhost:9000")
 	if err != nil {
-		fmt.Println("Erro ao iniciar porta 8000: ", err)
+		fmt.Println("Erro ao iniciar porta 9000: ", err)
 		return
 	}
 	defer listener.Close()
@@ -185,17 +283,90 @@ func listenSector() {
 	}
 }
 
-func register() {
+func register() (float64, float64) {
+	reader := bufio.NewReader(os.Stdin)
 
+	var left, right float64
+	var qtd int
+
+	for {
+		fmt.Print("Digite a longitude esquerda: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		val, err := strconv.ParseFloat(input, 64)
+		if err != nil {
+			fmt.Println("Valor inválido")
+			continue
+		}
+
+		left = val
+		break
+	}
+
+	for {
+		fmt.Print("Digite a longitude direita: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		val, err := strconv.ParseFloat(input, 64)
+		if err != nil {
+			fmt.Println("Valor inválido")
+			continue
+		}
+
+		if val <= left {
+			fmt.Println("Deve ser maior que a longitude esquerda")
+			continue
+		}
+
+		right = val
+		break
+	}
+
+	for {
+		fmt.Print("Quantos drones: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		val, err := strconv.Atoi(input)
+		if err != nil || val <= 0 {
+			fmt.Println("Número inválido")
+			continue
+		}
+
+		qtd = val
+		break
+	}
+
+	for i := 0; i < qtd; i++ {
+		for {
+			fmt.Printf("Digite o IP do drone %d: ", i+1)
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+
+			if input == "" {
+				fmt.Println("Valor inválido")
+				continue
+			}
+
+			drones = append(drones, input)
+			break
+		}
+	}
+
+	return left, right
 }
 
 func main() {
-	if len(os.Args) < 5 {
-		return
+	sector = Sector{
+		XLeft:  0,
+		XRight: 100,
+		YTop:   100,
+		YLow:   0,
 	}
 
-	go listenSector()
 	go listenSensor()
 
-	go checkSector(os.Args)
+	select {}
 }
