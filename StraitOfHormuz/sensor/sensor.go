@@ -7,8 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,57 +21,63 @@ type Sensor struct {
 	IsCritical bool    `json:"is_critical"`
 }
 
+type Sector struct {
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForSensor string  `json:"address_for_sensor"`
+	Left             float64 `json:"left"`
+	Right            float64 `json:"right"`
+	Top              float64 `json:"top"`
+	Bottom           float64 `json:"bottom"`
+}
+
+type SectorConfig struct {
+	Sectors []Sector `json:"sectors.json"`
+}
+
 var (
-	sensor  Sensor
+	sensor Sensor
+	mu     sync.Mutex
+
 	sensors = []string{
 		"Radar costeiro",
 	}
-	mu sync.Mutex
 )
 
-func sendSensor(encoder *json.Encoder, sensor Sensor) error {
-	err := encoder.Encode(sensor)
+// == SENSOR
 
+func runSensor(sectorAddress string) {
+	conn, err := net.DialTimeout("tcp", sectorAddress, 2*time.Second)
 	if err != nil {
-		fmt.Println("Erro ao enviar dados do sensor ", err)
-		return err
+		fmt.Println("Erro ao conectar com setor:", err)
+		return
 	}
 
-	return nil
-}
-
-func monitoring() {
-	for {
-		r := rand.Float64()
-		fmt.Println(r)
-		mu.Lock()
-
-		sensor.IsActive = r > 0.5
-		sensor.IsCritical = r > 0.7
-		fmt.Println(sensor)
-		mu.Unlock()
-
-		time.Sleep(5 * time.Second)
-	}
-}
-
-func communication(conn net.Conn) {
 	encoder := json.NewEncoder(conn)
 
 	for {
+		r := rand.Float64()
+
 		mu.Lock()
+		sensor.IsActive = r > 0.5
+		sensor.IsCritical = r > 0.7
 		currentSensor := sensor
 		mu.Unlock()
 
-		if sendSensor(encoder, currentSensor) != nil {
-			conn.Close()
+		fmt.Println(currentSensor)
+
+		if err := encoder.Encode(currentSensor); err != nil {
+			fmt.Println("Erro ao se comunicar com setor:", err)
+			_ = conn.Close()
 
 			for {
-				conn, err := net.DialTimeout("tcp", "localhost:9000", 2*time.Second)
+				conn, err = net.DialTimeout("tcp", sectorAddress, 2*time.Second)
 				if err == nil {
+					fmt.Println("Reconectado ao setor:", sectorAddress)
 					encoder = json.NewEncoder(conn)
 					break
 				}
+
+				fmt.Println("Tentando reconectar...")
 				time.Sleep(2 * time.Second)
 			}
 		}
@@ -82,6 +86,38 @@ func communication(conn net.Conn) {
 	}
 }
 
+// == LOAD SETOR
+
+func findSectorByPosition(path string, x, y float64) string {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Erro ao abrir sectors.json.json:", err)
+		return ""
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	var config SectorConfig
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Println("Erro ao ler sectors.json.json:", err)
+		return ""
+	}
+
+	for _, sector := range config.Sectors {
+		if x >= sector.Left &&
+			x <= sector.Right &&
+			y <= sector.Top &&
+			y >= sector.Bottom {
+			return sector.AddressForSensor
+		}
+	}
+
+	return ""
+}
+
+// == REGISTER
+
 func register() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -89,7 +125,6 @@ func register() {
 	var x, y float64
 
 	for {
-		clearTerminal()
 		fmt.Print("Digite o tipo do sensor: ")
 		typeString, _ = reader.ReadString('\n')
 		typeString = strings.TrimSpace(typeString)
@@ -105,7 +140,7 @@ func register() {
 		if !validType {
 			fmt.Println("Tipo de sensor inválido")
 			fmt.Println("Pressione ENTER...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 			continue
 		}
 
@@ -113,7 +148,6 @@ func register() {
 	}
 
 	for {
-		clearTerminal()
 		fmt.Print("Digite a posição X do sensor: ")
 		xStr, _ := reader.ReadString('\n')
 		xStr = strings.TrimSpace(xStr)
@@ -122,14 +156,7 @@ func register() {
 		if err != nil {
 			fmt.Println("Valor inválido")
 			fmt.Println("Pressione ENTER...")
-			reader.ReadString('\n')
-			continue
-		}
-
-		if val < 0 || val > 100 {
-			fmt.Println("X deve estar entre 0 e 100")
-			fmt.Println("Pressione ENTER...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 			continue
 		}
 
@@ -138,7 +165,6 @@ func register() {
 	}
 
 	for {
-		clearTerminal()
 		fmt.Print("Digite a posição Y do sensor: ")
 		yStr, _ := reader.ReadString('\n')
 		yStr = strings.TrimSpace(yStr)
@@ -147,14 +173,7 @@ func register() {
 		if err != nil {
 			fmt.Println("Valor inválido")
 			fmt.Println("Pressione ENTER...")
-			reader.ReadString('\n')
-			continue
-		}
-
-		if val < 0 || val > 100 {
-			fmt.Println("Y deve estar entre 0 e 100")
-			fmt.Println("Pressione ENTER...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 			continue
 		}
 
@@ -163,38 +182,29 @@ func register() {
 	}
 
 	sensor = Sensor{
-		Type: typeString,
-		X:    x,
-		Y:    y,
+		Type:       typeString,
+		X:          x,
+		Y:          y,
+		IsActive:   false,
+		IsCritical: false,
 	}
 }
 
+// == MAIN
+
 func main() {
-	clearTerminal()
+	sectorsPath := "../data/sectors.json"
 
 	register()
 
-	conn, err := net.DialTimeout("tcp", "localhost:9000", 2*time.Second)
-	if err != nil {
-		fmt.Println("Erro ao conectar com setor: ", err)
+	sectorAddress := findSectorByPosition(sectorsPath, sensor.X, sensor.Y)
+
+	if sectorAddress == "" {
+		fmt.Println("Nenhum setor encontrado para essa localização")
 		return
 	}
 
-	go monitoring()
-	go communication(conn)
+	go runSensor(sectorAddress)
 
 	select {}
-}
-
-func clearTerminal() {
-	var cmd *exec.Cmd
-
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "cls")
-	} else {
-		cmd = exec.Command("clear")
-	}
-
-	cmd.Stdout = os.Stdout
-	cmd.Run()
 }

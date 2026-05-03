@@ -1,0 +1,20 @@
+{
+  "drones": [
+    {
+      "address": "localhost:6000",
+      "id": 1,
+      "x": 0,
+      "y": 0,
+      "is_busy": false,
+      "is_on": true
+    },
+    {
+      "address": "localhost:9000",
+      "id": 1,
+      "x": 0,
+      "y": 0,
+      "is_busy": false,
+      "is_on": true
+    }
+  ]
+}

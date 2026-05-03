@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
-	"runtime"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,87 +20,90 @@ type Command struct {
 }
 
 type Drone struct {
-	ID     int     `json:"id"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	IsBusy bool    `json:"is_busy"`
-	IsOn   bool    `json:"is_on"`
+	Address string  `json:"address"`
+	ID      int     `json:"id"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	IsBusy  bool    `json:"is_busy"`
+	IsOn    bool    `json:"is_on"`
 }
 
-type Sensor struct {
-	Type       string  `json:"type"`
-	Longitude  float64 `json:"longitude"`
-	IsActive   bool    `json:"is_active"`
-	IsCritical bool    `json:"is_critical"`
+type DroneConfig struct {
+	Drones []Drone `json:"drones"`
 }
 
-var drone Drone
+var (
+	drone Drone
+	mu    sync.Mutex
+)
 
-func receiveCommand(decoder *json.Decoder, command *Command) error {
-	err := decoder.Decode(command)
-
-	if err != nil {
-		fmt.Println("Erro ao receber comando: ", err)
-		return err
-	}
-
-	return nil
-}
-
-func sendMessage(encoder *json.Encoder, message string) error {
-	err := encoder.Encode(message)
-
-	if err != nil {
-		fmt.Println("Erro ao enviar mensagem: ", err)
-		return err
-	}
-
-	return nil
-}
+// == SETOR
 
 func handleSector(conn net.Conn) {
+	defer func() {
+		_ = conn.Close()
+	}()
+
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 
 	for {
 		var command Command
-		if receiveCommand(decoder, &command) != nil {
+
+		if err := decoder.Decode(&command); err != nil {
+			fmt.Println("Erro ao receber comando:", err)
 			return
 		}
 
-		if command.Type == "REQUEST" {
-			if drone.IsBusy || !drone.IsOn {
-				sendMessage(encoder, "BUSY")
-				continue
+		if command.Type != "REQUEST" {
+			if err := encoder.Encode("INVALID_COMMAND"); err != nil {
+				fmt.Println("Erro ao responder setor:", err)
+				return
 			}
-
-			drone.IsBusy = true
-			sendMessage(encoder, "SERVING")
-
-			time.Sleep(5 * time.Second)
-
-			drone.IsBusy = false
-			sendMessage(encoder, "FINISHED")
+			continue
 		}
 
-		time.Sleep(1 * time.Second)
+		mu.Lock()
+
+		if drone.IsBusy || !drone.IsOn {
+			mu.Unlock()
+
+			if err := encoder.Encode("BUSY"); err != nil {
+				fmt.Println("Erro ao responder setor:", err)
+				return
+			}
+
+			continue
+		}
+
+		drone.IsBusy = true
+		mu.Unlock()
+
+		if err := encoder.Encode("SERVING"); err != nil {
+			fmt.Println("Erro ao responder setor:", err)
+			return
+		}
+
+		time.Sleep(5 * time.Second)
+
+		mu.Lock()
+		drone.IsBusy = false
+		mu.Unlock()
+
+		if err := encoder.Encode("FINISHED"); err != nil {
+			fmt.Println("Erro ao responder setor:", err)
+			return
+		}
 	}
 }
 
-func listenSector() {
-	clearTerminal()
-
-	listener, err := net.Listen("tcp", "localhost:7500")
-	if err != nil {
-		fmt.Println("Erro ao iniciar servidor (setor): ", err)
-		return
-	}
-	defer listener.Close()
+func listenSector(listener net.Listener) {
+	fmt.Println("Drone escutando setores...")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Erro ao se conectar: ", err)
+			fmt.Println("Erro ao aceitar conexão:", err)
 			continue
 		}
 
@@ -106,76 +111,123 @@ func listenSector() {
 	}
 }
 
-/*func listenDrone(addressStr string) error {
-	clearTerminal()
+// == REGISTER
+
+func registerDroneID() int {
 	reader := bufio.NewReader(os.Stdin)
 
-	address, err := strconv.Atoi(addressStr)
-	if err != nil {
-		fmt.Println("Porta para drone inválida")
-		fmt.Println("Pressione ENTER...")
-		reader.ReadString('\n')
-		return err
-	}
-
-	if address < 7500 || address > 7999 {
-		fmt.Println("Selecione uma porta para drone entre 7500 e 7999")
-		fmt.Println("Pressione ENTER...")
-		reader.ReadString('\n')
-		return fmt.Errorf("Porta de drone fora do intervalo")
-	}
-
-	listener, err := net.Listen("tcp", "localhost:"+addressStr)
-	if err != nil {
-		fmt.Println("Erro ao iniciar servidor (drone): ", err)
-		fmt.Println("Pressione ENTER...")
-		return err
-	}
-	defer listener.Close()
-
 	for {
-		conn, err := listener.Accept()
+		fmt.Print("Digite o ID do drone: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		id, err := strconv.Atoi(input)
 		if err != nil {
-			fmt.Println("Erro ao se conectar: ", err)
+			fmt.Println("ID inválido, digite apenas números")
 			continue
 		}
 
-		go handleDrone(conn)
+		return id
 	}
-} */
+}
+
+func registerDronePort() net.Listener {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Print("Digite o endereço do drone: ")
+		address, _ := reader.ReadString('\n')
+		address = strings.TrimSpace(address)
+
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			fmt.Println("Endereço inválido ou já em uso")
+			continue
+		}
+
+		drone.Address = address
+
+		return listener
+	}
+}
+
+// == SAVE
+
+func saveDrone(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Erro ao abrir drones.json:", err)
+		return
+	}
+
+	var config DroneConfig
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		_ = file.Close()
+		fmt.Println("Erro ao ler drones.json:", err)
+		return
+	}
+	_ = file.Close()
+
+	for _, d := range config.Drones {
+		if d.Address == drone.Address {
+			fmt.Println("Esse drone já está salvo no arquivo")
+			return
+		}
+	}
+
+	config.Drones = append(config.Drones, drone)
+
+	out, err := os.Create(path)
+	if err != nil {
+		fmt.Println("Erro ao salvar drones.json:", err)
+		return
+	}
+
+	encoder := json.NewEncoder(out)
+	encoder.SetIndent("", "  ")
+
+	if err := encoder.Encode(config); err != nil {
+		_ = out.Close()
+		fmt.Println("Erro ao escrever drones.json:", err)
+		return
+	}
+
+	_ = out.Close()
+}
+
+// == MAIN
 
 func main() {
-	clearTerminal()
+	dronesPath := "../data/drones.json"
+
+	id := registerDroneID()
 
 	drone = Drone{
-		ID:     1,
+		ID:     id,
 		X:      0,
 		Y:      0,
 		IsBusy: false,
 		IsOn:   true,
 	}
 
-	go listenSector()
+	listener := registerDronePort()
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	saveDrone(dronesPath)
+
+	go listenSector(listener)
 
 	go func() {
 		for {
+			mu.Lock()
 			fmt.Println(drone)
+			mu.Unlock()
+
 			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	select {}
-}
-
-func clearTerminal() {
-	var cmd *exec.Cmd
-
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "cls")
-	} else {
-		cmd = exec.Command("clear")
-	}
-
-	cmd.Stdout = os.Stdout
-	cmd.Run()
 }
