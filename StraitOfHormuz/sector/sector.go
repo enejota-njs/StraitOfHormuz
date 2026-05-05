@@ -36,6 +36,10 @@ type Sector struct {
 	Bottom           float64 `json:"bottom"`
 }
 
+type Message struct {
+	Text string `json:"text"`
+}
+
 type Drone struct {
 	Address string  `json:"address"`
 	ID      int     `json:"id"`
@@ -43,14 +47,6 @@ type Drone struct {
 	Y       float64 `json:"y"`
 	IsBusy  bool    `json:"is_busy"`
 	IsOn    bool    `json:"is_on"`
-}
-
-type SectorConfig struct {
-	Sectors []Sector `json:"sectors.json"`
-}
-
-type DroneConfig struct {
-	Drones []Drone `json:"drones"`
 }
 
 var (
@@ -127,199 +123,6 @@ func requestDrone(sensor Sensor) {
 	fmt.Println("Nenhum drone finalizou a solicitação")
 }
 
-// == SECTOR
-
-func treatSector(conn net.Conn) {
-	if conn != nil {
-		_ = conn.Close()
-	}
-}
-
-func addSectorLocal(newSector Sector) {
-	if newSector.AddressForSector == sector.AddressForSector {
-		return
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	for _, s := range sectors {
-		if s.AddressForSector == newSector.AddressForSector {
-			return
-		}
-	}
-
-	sectors = append(sectors, newSector)
-	fmt.Println("Novo setor adicionado na lista local:", newSector.AddressForSector)
-}
-
-func monitorSector(address string) {
-	for {
-		conn, err := net.DialTimeout("tcp", address, 2*time.Second)
-		if err != nil {
-			fmt.Println("Setor indisponível:", address)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-
-		encoder := json.NewEncoder(conn)
-		decoder := json.NewDecoder(conn)
-
-		for {
-			if err := encoder.Encode("PING"); err != nil {
-				fmt.Println("Erro ao enviar PING para:", address)
-				treatSector(conn)
-				break
-			}
-
-			var message string
-			if err := decoder.Decode(&message); err != nil {
-				fmt.Println("Erro ao receber PONG de:", address)
-				treatSector(conn)
-				break
-			}
-
-			if message != "PONG" {
-				fmt.Println("Resposta inválida de:", address)
-				treatSector(conn)
-				break
-			}
-
-			time.Sleep(5 * time.Second)
-		}
-	}
-}
-
-func checkSector() {
-	alreadyMonitoring := make(map[string]bool)
-
-	for {
-		mu.Lock()
-		current := make([]Sector, len(sectors))
-		copy(current, sectors)
-		mu.Unlock()
-
-		for _, s := range current {
-			if s.AddressForSector == sector.AddressForSector {
-				continue
-			}
-
-			if !alreadyMonitoring[s.AddressForSector] {
-				alreadyMonitoring[s.AddressForSector] = true
-				go monitorSector(s.AddressForSector)
-			}
-		}
-
-		time.Sleep(2 * time.Second)
-	}
-}
-
-func handleSector(conn net.Conn) {
-	encoder := json.NewEncoder(conn)
-	decoder := json.NewDecoder(conn)
-
-	for {
-		var message string
-
-		if err := decoder.Decode(&message); err != nil {
-			treatSector(conn)
-			return
-		}
-
-		if message == "PING" {
-			if err := encoder.Encode("PONG"); err != nil {
-				treatSector(conn)
-				return
-			}
-			continue
-		}
-
-		var newSector Sector
-		if err := json.Unmarshal([]byte(message), &newSector); err != nil {
-			fmt.Println("Mensagem incorreta do setor")
-			treatSector(conn)
-			return
-		}
-
-		addSectorLocal(newSector)
-
-		if err := encoder.Encode("OK"); err != nil {
-			treatSector(conn)
-			return
-		}
-	}
-}
-
-func notifySectorsMyAddress() {
-	mu.Lock()
-	current := make([]Sector, len(sectors))
-	copy(current, sectors)
-	mu.Unlock()
-
-	for _, s := range current {
-		if s.AddressForSector == sector.AddressForSector {
-			continue
-		}
-
-		conn, err := net.DialTimeout("tcp", s.AddressForSector, 2*time.Second)
-		if err != nil {
-			fmt.Println("Erro ao avisar setor:", s.AddressForSector)
-			continue
-		}
-
-		encoder := json.NewEncoder(conn)
-		decoder := json.NewDecoder(conn)
-
-		data, err := json.Marshal(sector)
-		if err != nil {
-			fmt.Println("Erro ao converter setor para JSON:", err)
-			_ = conn.Close()
-			continue
-		}
-
-		if err := encoder.Encode(string(data)); err != nil {
-			fmt.Println("Erro ao enviar endereço para setor:", s.AddressForSector)
-			_ = conn.Close()
-			continue
-		}
-
-		var response string
-		if err := decoder.Decode(&response); err != nil {
-			fmt.Println("Erro ao receber confirmação do setor:", s.AddressForSector)
-			_ = conn.Close()
-			continue
-		}
-
-		_ = conn.Close()
-	}
-}
-
-func removeSelfFromSectors() {
-	var result []Sector
-
-	for _, s := range sectors {
-		if s.AddressForSector != sector.AddressForSector {
-			result = append(result, s)
-		}
-	}
-
-	sectors = result
-}
-
-func listenSector(listener net.Listener) {
-	fmt.Println("Servidor (setor) inicializado")
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Erro ao se conectar com setor:", err)
-			continue
-		}
-
-		go handleSector(conn)
-	}
-}
-
 // == SENSOR
 
 func handleSensor(conn net.Conn) {
@@ -353,28 +156,159 @@ func listenSensor(listener net.Listener) {
 	}
 }
 
+// == SECTOR
+
+func removeSector(address string) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	var filtered []Sector
+
+	for _, s := range sectors {
+		if s.AddressForSector == address {
+			continue
+		}
+
+		filtered = append(filtered, s)
+	}
+
+	sectors = filtered
+} // Finalizada
+
+func monitorSectors() {
+	for {
+		mu.Lock()
+		currentSectors := append([]Sector(nil), sectors...)
+		mu.Unlock()
+
+		for _, s := range currentSectors {
+			address := s.AddressForSector
+
+			conn, err := net.DialTimeout("tcp", address, 2*time.Second)
+			if err != nil {
+				removeSector(address)
+				continue
+			}
+
+			encoder := json.NewEncoder(conn)
+			decoder := json.NewDecoder(conn)
+
+			message := Message{Text: "PING"}
+
+			if encoder.Encode(message) != nil {
+				_ = conn.Close()
+				removeSector(address)
+				continue
+			}
+
+			if decoder.Decode(&message) != nil {
+				_ = conn.Close()
+				removeSector(address)
+				continue
+			}
+
+			if message.Text != "PONG" {
+				_ = conn.Close()
+				removeSector(address)
+				continue
+			}
+
+			_ = conn.Close()
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+} // Finalizada
+
+func handleSector(conn net.Conn) {
+	defer func() { _ = conn.Close() }()
+
+	encoder := json.NewEncoder(conn)
+	decoder := json.NewDecoder(conn)
+
+	var message Message
+
+	if decoder.Decode(&message) != nil {
+		return
+	}
+
+	if message.Text == "PING" {
+		message.Text = "PONG"
+		_ = encoder.Encode(message)
+	}
+} // Finalizada
+
+func listenSectors() {
+	listener, err := net.Listen("tcp", ":7000")
+	if err != nil {
+		fmt.Println("Erro ao iniciar servidor (setor):", err)
+		return
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	fmt.Println("Servidor (setor) inicializado na porta 7000")
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Erro ao se conectar com setor:", err)
+			continue
+		}
+
+		go handleSector(conn)
+	}
+} // Finalizada
+
 // == LOAD DATA
+
+func getIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = conn.Close() }()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+} // Finalizada
 
 func loadSectors(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = file.Close()
-	}()
+	defer func() { _ = file.Close() }()
 
-	var config SectorConfig
+	var config []Sector
 	if err := json.NewDecoder(file).Decode(&config); err != nil {
 		return err
 	}
 
+	myIP := getIP()
+
+	var filtered []Sector
+
+	for _, s := range config {
+		host, _, err := net.SplitHostPort(s.AddressForSector)
+		if err != nil {
+			continue
+		}
+
+		if host == myIP {
+			continue
+		}
+
+		filtered = append(filtered, s)
+	}
+
 	mu.Lock()
-	sectors = config.Sectors
+	sectors = filtered
 	mu.Unlock()
 
 	return nil
-}
+} // Finalizada
 
 func loadDrones(path string) error {
 	file, err := os.Open(path)
@@ -385,184 +319,17 @@ func loadDrones(path string) error {
 		_ = file.Close()
 	}()
 
-	var config DroneConfig
+	var config []Drone
 	if err := json.NewDecoder(file).Decode(&config); err != nil {
 		return err
 	}
 
 	mu.Lock()
-	drones = config.Drones
+	drones = config
 	mu.Unlock()
 
 	return nil
-}
-
-// == SAVE DATA
-
-func saveSector(path string) {
-	file, err := os.Open(path)
-	if err != nil {
-		fmt.Println("Erro ao abrir sectors.json", err)
-		return
-	}
-
-	var config SectorConfig
-	if err := json.NewDecoder(file).Decode(&config); err != nil {
-		_ = file.Close()
-		fmt.Println("Erro ao ler sectors.json:", err)
-		return
-	}
-	_ = file.Close()
-
-	for _, s := range config.Sectors {
-		if s.AddressForSector == sector.AddressForSector {
-			fmt.Println("Esse setor já está salvo no arquivo")
-			return
-		}
-	}
-
-	config.Sectors = append(config.Sectors, sector)
-
-	out, err := os.Create(path)
-	if err != nil {
-		fmt.Println("Erro ao salvar sectors.json:", err)
-		return
-	}
-
-	encoder := json.NewEncoder(out)
-	encoder.SetIndent("", "  ")
-
-	if err := encoder.Encode(config); err != nil {
-		_ = out.Close()
-		fmt.Println("Erro ao escrever sectors.json:", err)
-		return
-	}
-
-	_ = out.Close()
-}
-
-// == REGISTER
-
-func registerSectorPort() net.Listener {
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		fmt.Print("Digite o endereço do setor: ")
-		address, _ := reader.ReadString('\n')
-		address = strings.TrimSpace(address)
-
-		listener, err := net.Listen("tcp", address)
-		if err != nil {
-			fmt.Println("Essa porta/endereço já está em uso ou é inválido")
-			continue
-		}
-
-		sector.AddressForSector = address
-
-		return listener
-	}
-}
-
-func registerSensorPort() net.Listener {
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		fmt.Print("Digite o endereço para escutar sensores: ")
-		address, _ := reader.ReadString('\n')
-		address = strings.TrimSpace(address)
-
-		listener, err := net.Listen("tcp", address)
-		if err != nil {
-			fmt.Println("Essa porta/endereço já está em uso ou é inválido")
-			continue
-		}
-
-		sector.AddressForSensor = address
-
-		return listener
-	}
-}
-
-func registerSector() {
-	reader := bufio.NewReader(os.Stdin)
-
-	var left, right, top, bottom float64
-
-	for {
-		fmt.Print("Digite o X da esquerda: ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		val, err := strconv.ParseFloat(input, 64)
-		if err != nil {
-			fmt.Println("Valor inválido")
-			continue
-		}
-
-		left = val
-		break
-	}
-
-	for {
-		fmt.Print("Digite o X da direita: ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		val, err := strconv.ParseFloat(input, 64)
-		if err != nil {
-			fmt.Println("Valor inválido")
-			continue
-		}
-
-		if val <= left {
-			fmt.Println("O X da direita deve ser maior que o X da esquerda")
-			continue
-		}
-
-		right = val
-		break
-	}
-
-	for {
-		fmt.Print("Digite o Y de cima: ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		val, err := strconv.ParseFloat(input, 64)
-		if err != nil {
-			fmt.Println("Valor inválido")
-			continue
-		}
-
-		top = val
-		break
-	}
-
-	for {
-		fmt.Print("Digite o Y de baixo: ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		val, err := strconv.ParseFloat(input, 64)
-		if err != nil {
-			fmt.Println("Valor inválido")
-			continue
-		}
-
-		if val >= top {
-			fmt.Println("O Y de baixo deve ser menor que o Y de cima")
-			continue
-		}
-
-		bottom = val
-		break
-	}
-
-	sector.Left = left
-	sector.Right = right
-	sector.Top = top
-	sector.Bottom = bottom
-}
+} // Finalizada
 
 // == MAIN
 
@@ -570,44 +337,18 @@ func main() {
 	sectorsPath := "../data/sectors.json"
 	dronesPath := "../data/drones.json"
 
-	registerSector()
-
-	listenerSector := registerSectorPort()
-	defer func() {
-		_ = listenerSector.Close()
-	}()
-
-	listenerSensor := registerSensorPort()
-	defer func() {
-		_ = listenerSensor.Close()
-	}()
-
-	saveSector(sectorsPath)
-
-	if err := loadSectors(sectorsPath); err != nil {
-		panic(err)
+	if loadSectors(sectorsPath) != nil {
+		return
 	}
 
-	removeSelfFromSectors()
-	notifySectorsMyAddress()
-
-	if err := loadDrones(dronesPath); err != nil {
-		panic(err)
+	if loadDrones(dronesPath) != nil {
+		return
 	}
 
-	go func() {
-		for {
-			if err := loadDrones(dronesPath); err != nil {
-				fmt.Println("Erro ao carregar drones:", err)
-			}
+	go listenSectors()
+	go monitorSectors()
 
-			time.Sleep(5 * time.Second)
-		}
-	}()
-
-	go listenSector(listenerSector)
-	go listenSensor(listenerSensor)
-	go checkSector()
+	go listenSensor()
 
 	select {}
 }
