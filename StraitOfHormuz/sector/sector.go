@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -131,7 +128,7 @@ func handleSensor(conn net.Conn) {
 
 	for {
 		if err := decoder.Decode(&sensor); err != nil {
-			fmt.Println("Erro ao receber sensor:", err)
+			fmt.Println("Erro ao receber sensor: ", err)
 			_ = conn.Close()
 			return
 		}
@@ -140,21 +137,30 @@ func handleSensor(conn net.Conn) {
 			go requestDrone(sensor)
 		}
 	}
-}
+} // Finalizada
 
-func listenSensor(listener net.Listener) {
+func listenSensor() {
+	listener, err := net.Listen("tcp", ":8000")
+	if err != nil {
+		fmt.Println("Erro ao iniciar servidor (sensor):", err)
+		return
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+
 	fmt.Println("Servidor (sensor) inicializado")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Erro ao se conectar com sensor:", err)
+			fmt.Println("Erro ao se conectar com sensor: ", err)
 			continue
 		}
 
 		go handleSensor(conn)
 	}
-}
+} // Finalizada
 
 // == SECTOR
 
