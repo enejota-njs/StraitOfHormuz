@@ -1,18 +1,12 @@
 [
   {
-    "address": "10.0.0.1:6001",
-    "id": 1,
-    "x": 0,
-    "y": 0,
-    "is_busy": false,
-    "is_on": true
+    "address_for_sector": "10.0.0.1:7001",
+    "address_for_drone": "10.0.0.1:8001",
+    "id": 1
     },
   {
-    "address": "10.0.0.1:6002",
-    "id": 2,
-    "x": 0,
-    "y": 0,
-    "is_busy": false,
-    "is_on": true
+    "address_for_sector": "10.0.0.1:7002",
+    "address_for_drone": "10.0.0.1:8002",
+    "id": 2
   }
 ]

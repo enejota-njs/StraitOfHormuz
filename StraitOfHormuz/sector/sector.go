@@ -17,11 +17,13 @@ type Sensor struct {
 	IsCritical bool    `json:"is_critical"`
 }
 
-type Command struct {
-	Type       string  `json:"type"`
+type Request struct {
+	OriginID   int     `json:"origin_id"`
+	Status     string  `json:"status"`
 	X          float64 `json:"x"`
 	Y          float64 `json:"y"`
 	IsCritical bool    `json:"is_critical"`
+	Clock      int     `json:"clock"`
 }
 
 type Sector struct {
@@ -47,77 +49,64 @@ type Drone struct {
 }
 
 var (
-	sector  Sector
-	sectors []Sector
-	drones  []Drone
-	mu      sync.Mutex
+	clock     int
+	sectors   []Sector
+	requestID int
+	drones    []Drone
+	mu        sync.Mutex
 )
 
 // == DRONE
 
 func requestDrone(sensor Sensor) {
 	mu.Lock()
-	currentDrones := make([]Drone, len(drones))
-	copy(currentDrones, drones)
+
+	clock++
+	requestID++
+
+	request := Request{
+		OriginID:   requestID,
+		Status:     "PENDING",
+		X:          sensor.X,
+		Y:          sensor.Y,
+		IsCritical: sensor.IsCritical,
+		Clock:      clock,
+	}
+
+	currentDrones := append([]Drone(nil), drones...)
+
 	mu.Unlock()
 
-	for _, drone := range currentDrones {
-		conn, err := net.DialTimeout("tcp", drone.Address, 2*time.Second)
+	for _, d := range currentDrones {
+		conn, err := net.DialTimeout("tcp", d.Address, 2*time.Second)
 		if err != nil {
-			fmt.Println("Drone indisponível:", drone.Address)
+			fmt.Println("Drone indisponível: ", d.Address)
 			continue
 		}
 
 		encoder := json.NewEncoder(conn)
 		decoder := json.NewDecoder(conn)
 
-		command := Command{
-			Type:       "REQUEST",
-			X:          sensor.X,
-			Y:          sensor.Y,
-			IsCritical: sensor.IsCritical,
-		}
-
-		if err := encoder.Encode(command); err != nil {
-			fmt.Println("Erro ao enviar comando para drone:", drone.Address)
+		if err := encoder.Encode(request); err != nil {
+			fmt.Println("Erro ao enviar requisição para drone: ", d.Address)
 			_ = conn.Close()
 			continue
 		}
 
-		var response string
+		var response Message
 
 		if err := decoder.Decode(&response); err != nil {
-			fmt.Println("Erro ao receber resposta do drone:", drone.Address)
+			fmt.Println("Erro ao receber resposta do drone: ", d.Address)
 			_ = conn.Close()
 			continue
 		}
 
-		if response == "BUSY" {
-			fmt.Println("Drone ocupado:", drone.Address)
-			_ = conn.Close()
-			continue
-		}
-
-		if response == "SERVING" {
-			fmt.Println("Drone atendendo solicitação:", drone.Address)
-		}
-
-		if err := decoder.Decode(&response); err != nil {
-			fmt.Println("Erro ao receber finalização do drone:", drone.Address)
-			_ = conn.Close()
-			continue
-		}
-
-		if response == "FINISHED" {
-			fmt.Println("Drone finalizou solicitação:", drone.Address)
-			_ = conn.Close()
-			return
+		if response.Text == "QUEUED" {
+			fmt.Println("Drone recebeu requisição:", d.Address)
 		}
 
 		_ = conn.Close()
 	}
-
-	fmt.Println("Nenhum drone finalizou a solicitação")
 }
 
 // == SENSOR
@@ -140,7 +129,7 @@ func handleSensor(conn net.Conn) {
 } // Finalizada
 
 func listenSensor() {
-	listener, err := net.Listen("tcp", ":8000")
+	listener, err := net.Listen("tcp", ":6000")
 	if err != nil {
 		fmt.Println("Erro ao iniciar servidor (sensor):", err)
 		return
@@ -245,7 +234,7 @@ func handleSector(conn net.Conn) {
 } // Finalizada
 
 func listenSectors() {
-	listener, err := net.Listen("tcp", ":7000")
+	listener, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		fmt.Println("Erro ao iniciar servidor (setor):", err)
 		return
@@ -254,7 +243,7 @@ func listenSectors() {
 		_ = listener.Close()
 	}()
 
-	fmt.Println("Servidor (setor) inicializado na porta 7000")
+	fmt.Println("Servidor (setor) inicializado na porta 5000")
 
 	for {
 		conn, err := listener.Accept()
