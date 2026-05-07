@@ -11,6 +11,22 @@ import (
 	"time"
 )
 
+type State struct {
+	Drones  []Drone  `json:"drones"`
+	Sensors []Sensor `json:"sensors"`
+	Sectors []Sector `json:"sectors"`
+}
+
+type Drone struct {
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForDrone  string  `json:"address_for_drone"`
+	ID               int     `json:"id"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
+	IsBusy           bool    `json:"is_busy"`
+	IsOn             bool    `json:"is_on"`
+}
+
 type Sensor struct {
 	Type       string  `json:"type"`
 	X          float64 `json:"x"`
@@ -171,6 +187,54 @@ func register() bool {
 	return true
 }
 
+// == SAVE DATA
+
+func saveSensorState(path string) error {
+	file, err := os.Open(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	state := State{}
+
+	if err == nil {
+		defer func() {
+			_ = file.Close()
+		}()
+
+		_ = json.NewDecoder(file).Decode(&state)
+	}
+
+	exists := false
+
+	for i := range state.Sensors {
+		if state.Sensors[i].X == sensor.X &&
+			state.Sensors[i].Y == sensor.Y {
+
+			state.Sensors[i] = sensor
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
+		state.Sensors = append(state.Sensors, sensor)
+	}
+
+	output, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = output.Close()
+	}()
+
+	encoder := json.NewEncoder(output)
+	encoder.SetIndent("", "  ")
+
+	return encoder.Encode(state)
+}
+
 // == MAIN
 
 func main() {
@@ -181,6 +245,10 @@ func main() {
 	if !register() {
 		return
 	}
+
+	savePath := "../data/world.json"
+
+	_ = saveSensorState(savePath)
 
 	sectorsPath := "../data/sectors.json"
 

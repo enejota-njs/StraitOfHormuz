@@ -11,6 +11,30 @@ import (
 	"time"
 )
 
+type State struct {
+	Drones  []Drone  `json:"drones"`
+	Sensors []Sensor `json:"sensors"`
+	Sectors []Sector `json:"sectors"`
+}
+
+type Sector struct {
+	ID               int     `json:"ID"`
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForSensor string  `json:"address_for_sensor"`
+	Left             float64 `json:"left"`
+	Right            float64 `json:"right"`
+	Top              float64 `json:"top"`
+	Bottom           float64 `json:"bottom"`
+}
+
+type Sensor struct {
+	Type       string  `json:"type"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	IsActive   bool    `json:"is_active"`
+	IsCritical bool    `json:"is_critical"`
+}
+
 type Request struct {
 	SectorID   int     `json:"sector_id"`
 	ID         int     `json:"origin_id"`
@@ -59,6 +83,32 @@ func calculateDistance(d Drone, r Request) float64 {
 
 func fulfillRequest(request Request) {
 	fmt.Println("Drone indo atender requisição:", request.ID)
+
+	steps := 50
+	delay := 100 * time.Millisecond
+
+	for i := 1; i <= steps; i++ {
+		mu.Lock()
+
+		dx := request.X - drone.X
+		dy := request.Y - drone.Y
+
+		drone.X += dx / float64(steps-i+1)
+		drone.Y += dy / float64(steps-i+1)
+
+		fmt.Println("Drone", drone.ID, "posição:", drone.X, drone.Y)
+
+		mu.Unlock()
+
+		time.Sleep(delay)
+	}
+
+	mu.Lock()
+	drone.X = request.X
+	drone.Y = request.Y
+	mu.Unlock()
+
+	fmt.Println("Drone chegou ao local da requisição")
 
 	time.Sleep(5 * time.Second)
 
@@ -209,6 +259,8 @@ func dispatchRequests() {
 
 					removeRequestDone(r, currentDrone)
 					warnDrones("DONE", r)
+				} else {
+					fmt.Println("[DRONE", currentDrone.ID, "] Aguardando Drone", closer.ID, "assumir requisição", r.ID)
 				}
 
 				fmt.Println("[DRONE", currentDrone.ID, "] Aguardando Drone", closer.ID, "assumir requisição", r.ID)
@@ -299,7 +351,7 @@ func handleSector(conn net.Conn) {
 
 	exists := false
 	for _, r := range requests {
-		if r.ID == request.ID {
+		if r.ID == request.ID && r.SectorID == request.SectorID {
 			exists = true
 			break
 		}
@@ -343,7 +395,7 @@ func handleSector(conn net.Conn) {
 	fmt.Println("[DRONE", drone.ID, "] Fila atual:")
 
 	for _, r := range requests {
-		fmt.Println("ID:", r.ID, "Clock:", r.Clock, "Crítica:", r.IsCritical, "Status:", r.Status)
+		fmt.Println("Setor:", r.SectorID, "ID:", r.ID, "Clock:", r.Clock, "Crítica:", r.IsCritical, "Status:", r.Status)
 	}
 
 	mu.Unlock()
@@ -411,6 +463,66 @@ func loadDrones(path string, myID int) error {
 	return nil
 } // Finalizada
 
+// == SAVE DATA
+
+func saveDroneState(path string) error {
+	file, err := os.Open(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	state := State{}
+
+	if err == nil {
+		defer func() {
+			_ = file.Close()
+		}()
+
+		_ = json.NewDecoder(file).Decode(&state)
+	}
+
+	exists := false
+
+	for i := range state.Drones {
+		if state.Drones[i].ID == drone.ID {
+			state.Drones[i] = drone
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
+		state.Drones = append(state.Drones, drone)
+	}
+
+	output, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = output.Close()
+	}()
+
+	encoder := json.NewEncoder(output)
+	encoder.SetIndent("", "  ")
+
+	return encoder.Encode(state)
+}
+
+func saveDroneLoop(path string) {
+	for {
+		mu.Lock()
+		err := saveDroneState(path)
+		mu.Unlock()
+
+		if err != nil {
+			fmt.Println("Erro ao salvar drone:", err)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 // == MAIN
 
 func main() {
@@ -424,6 +536,7 @@ func main() {
 	}
 
 	dronesPath := "../data/drones.json"
+	savePath := "../data/world.json"
 
 	if loadDrones(dronesPath, id) != nil {
 		return
@@ -432,6 +545,8 @@ func main() {
 	go listenSectors()
 	go listenDrones()
 	go dispatchRequests()
+
+	go saveDroneLoop(savePath)
 
 	select {}
 }
