@@ -19,7 +19,8 @@ type Sensor struct {
 }
 
 type Request struct {
-	OriginID   int     `json:"origin_id"`
+	SectorID   int     `json:"sector_id"`
+	ID         int     `json:"origin_id"`
 	Status     string  `json:"status"`
 	X          float64 `json:"x"`
 	Y          float64 `json:"y"`
@@ -69,13 +70,20 @@ func requestDrone(sensor Sensor) {
 	requestID++
 
 	request := Request{
-		OriginID:   requestID,
+		SectorID:   sector.ID,
+		ID:         requestID,
 		Status:     "PENDING",
 		X:          sensor.X,
 		Y:          sensor.Y,
 		IsCritical: sensor.IsCritical,
 		Clock:      clock,
 	}
+
+	fmt.Println("[SETOR", sector.ID, "] Nova requisição criada")
+	fmt.Println("ID:", request.ID)
+	fmt.Println("Clock:", request.Clock)
+	fmt.Println("X:", request.X, "Y:", request.Y)
+	fmt.Println("Crítica:", request.IsCritical)
 
 	currentDrones := append([]Drone(nil), drones...)
 
@@ -91,6 +99,8 @@ func requestDrone(sensor Sensor) {
 		encoder := json.NewEncoder(conn)
 		decoder := json.NewDecoder(conn)
 
+		fmt.Println("[SETOR", sector.ID, "] Enviando requisição", request.ID, "para Drone", d.ID)
+
 		if err := encoder.Encode(request); err != nil {
 			fmt.Println("Erro ao enviar requisição para drone: ID ", d.ID)
 			_ = conn.Close()
@@ -105,12 +115,14 @@ func requestDrone(sensor Sensor) {
 			continue
 		}
 
+		fmt.Println("[SETOR", sector.ID, "] Drone", d.ID, "respondeu:", response.Text)
+
 		if response.Text == "INVALID_COMMAND" {
 			fmt.Println("Requisição inválida")
 		}
 
 		if response.Text == "QUEUED" {
-			fmt.Println("Drone recebeu requisição: ID ", d.ID)
+			fmt.Println("[SETOR", sector.ID, "] Drone", d.ID, "recebeu requisição", request.SectorID, "-", request.ID)
 		}
 
 		_ = conn.Close()
@@ -163,24 +175,6 @@ func listenSensor() {
 
 // == SECTOR
 
-func removeSector(address string) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	var filtered []Sector
-
-	for _, s := range sectors {
-		if s.AddressForSector == address {
-			fmt.Println("Setor removido: ", address)
-			continue
-		}
-
-		filtered = append(filtered, s)
-	}
-
-	sectors = filtered
-} // Finalizada
-
 func monitorSectors() {
 	for {
 		mu.Lock()
@@ -192,7 +186,7 @@ func monitorSectors() {
 
 			conn, err := net.DialTimeout("tcp", address, 2*time.Second)
 			if err != nil {
-				removeSector(address)
+				fmt.Println("Setor offline: ", address)
 				continue
 			}
 
@@ -203,19 +197,19 @@ func monitorSectors() {
 
 			if encoder.Encode(message) != nil {
 				_ = conn.Close()
-				removeSector(address)
+				fmt.Println("Falha ao enviar PING para setor:", address)
 				continue
 			}
 
 			if decoder.Decode(&message) != nil {
 				_ = conn.Close()
-				removeSector(address)
+				fmt.Println("Falha ao receber PONG do setor:", address)
 				continue
 			}
 
 			if message.Text != "PONG" {
 				_ = conn.Close()
-				removeSector(address)
+				fmt.Println("Resposta inválida do setor:", address)
 				continue
 			}
 

@@ -58,7 +58,8 @@ func runSensor() {
 		currentSensor := sensor
 		mu.Unlock()
 
-		fmt.Println(currentSensor)
+		fmt.Println("[SENSOR] Enviando leitura para setor:", sector)
+		fmt.Println("[SENSOR] Dados:", currentSensor)
 
 		if err := encoder.Encode(currentSensor); err != nil {
 			fmt.Println("Erro ao se comunicar com setor: ", err)
@@ -110,6 +111,9 @@ func findSector(path string) bool {
 			y >= s.Bottom {
 			valid = true
 			sector = s.AddressForSensor
+
+			fmt.Println("[SENSOR] Sensor localizado em X:", x, "Y:", y)
+			fmt.Println("[SENSOR] Setor escolhido:", sector)
 		}
 	}
 
@@ -188,3 +192,16 @@ func main() {
 
 	select {}
 }
+
+/*
+  {
+    "address_for_sector": "localhost:5008",
+    "address_for_drone": "localhost:5009",
+    "id": 2
+  },
+  {
+    "address_for_sector": "localhost:5010",
+    "address_for_drone": "localhost:5011",
+    "id": 3
+  }
+*/
