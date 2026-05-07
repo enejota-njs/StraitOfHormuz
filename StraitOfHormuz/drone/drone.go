@@ -6,12 +6,13 @@ import (
 	"math"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
 
 type Request struct {
-	ID         int     `json:"OriginID"`
+	ID         int     `json:"origin_id"`
 	Status     string  `json:"status"`
 	X          float64 `json:"x"`
 	Y          float64 `json:"y"`
@@ -40,6 +41,7 @@ type Message struct {
 }
 
 var (
+	clock    int
 	drone    Drone
 	mu       sync.Mutex
 	drones   []Drone
@@ -202,7 +204,7 @@ func dispatchRequests() {
 }
 
 func handleDrones(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	decoder := json.NewDecoder(conn)
 
@@ -224,9 +226,11 @@ func handleDrones(conn net.Conn) {
 }
 
 func listenDrones() {
-	listener, err := net.Listen("tcp", ":9000")
+	_, port, _ := net.SplitHostPort(drone.AddressForDrone)
+
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		fmt.Println("Erro ao iniciar drone (drone):", err)
+		fmt.Println("Erro ao iniciar drone (drone): ", err)
 		return
 	}
 	defer listener.Close()
@@ -236,7 +240,7 @@ func listenDrones() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Erro ao aceitar conexão (drone):", err)
+			fmt.Println("Erro ao aceitar conexão (drone): ", err)
 			continue
 		}
 
@@ -257,7 +261,7 @@ func handleSector(conn net.Conn) {
 	var request Request
 
 	if err := decoder.Decode(&request); err != nil {
-		fmt.Println("Erro ao receber requisição")
+		fmt.Println("Erro ao receber requisição do setor")
 		return
 	}
 
@@ -286,16 +290,20 @@ func handleSector(conn net.Conn) {
 				break
 			}
 
-			if request.IsCritical == r.IsCritical {
-				if request.Clock < r.Clock {
-					index = i
-					break
-				}
+			if !request.IsCritical && r.IsCritical {
+				continue
+			}
 
-				if request.Clock == r.Clock && request.ID < r.ID {
-					index = i
-					break
-				}
+			if request.Clock < r.Clock {
+				index = i
+				break
+			}
+
+			if request.Clock == r.Clock &&
+				request.ID < r.ID {
+
+				index = i
+				break
 			}
 		}
 
@@ -308,7 +316,9 @@ func handleSector(conn net.Conn) {
 }
 
 func listenSectors() {
-	listener, err := net.Listen("tcp", ":7001")
+	_, port, _ := net.SplitHostPort(drone.AddressForSector)
+
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		fmt.Println("Erro ao iniciar servidor (setor): ", err)
 		return
@@ -322,7 +332,7 @@ func listenSectors() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Erro ao aceitar conexão (setor) : ", err)
+			fmt.Println("Erro ao aceitar conexão (setor): ", err)
 			continue
 		}
 
@@ -332,18 +342,7 @@ func listenSectors() {
 
 // == LOAD DATA
 
-func getIP() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = conn.Close() }()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	return localAddr.IP.String()
-} // Finalizada
-
-func loadDrones(path string) error {
+func loadDrones(path string, myID int) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -355,32 +354,23 @@ func loadDrones(path string) error {
 		return err
 	}
 
-	myIP := getIP()
-
 	var filtered []Drone
 
 	for _, d := range config {
-		host, _, err := net.SplitHostPort(d.AddressForSector)
-		if err != nil {
-			continue
-		}
-
-		if host == myIP {
-			drone = d
-			continue
-		}
-
 		d.X = 0
 		d.Y = 0
 		d.IsBusy = false
 		d.IsOn = true
 
+		if d.ID == myID {
+			drone = d
+			continue
+		}
+
 		filtered = append(filtered, d)
 	}
 
-	mu.Lock()
 	drones = filtered
-	mu.Unlock()
 
 	return nil
 } // Finalizada
@@ -388,9 +378,18 @@ func loadDrones(path string) error {
 // == MAIN
 
 func main() {
+	if len(os.Args) < 2 {
+		return
+	}
+
+	id, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		return
+	}
+
 	dronesPath := "../data/drones.json"
 
-	if loadDrones(dronesPath) != nil {
+	if loadDrones(dronesPath, id) != nil {
 		return
 	}
 

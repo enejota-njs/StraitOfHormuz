@@ -81,7 +81,7 @@ func requestDrone(sensor Sensor) {
 	for _, d := range currentDrones {
 		conn, err := net.DialTimeout("tcp", d.AddressForSector, 2*time.Second)
 		if err != nil {
-			fmt.Println("Drone indisponível: ", d.AddressForSector)
+			fmt.Println("Drone indisponível: ID ", d.ID)
 			continue
 		}
 
@@ -89,7 +89,7 @@ func requestDrone(sensor Sensor) {
 		decoder := json.NewDecoder(conn)
 
 		if err := encoder.Encode(request); err != nil {
-			fmt.Println("Erro ao enviar requisição para drone: ", d.AddressForSector)
+			fmt.Println("Erro ao enviar requisição para drone: ID ", d.ID)
 			_ = conn.Close()
 			continue
 		}
@@ -97,13 +97,17 @@ func requestDrone(sensor Sensor) {
 		var response Message
 
 		if err := decoder.Decode(&response); err != nil {
-			fmt.Println("Erro ao receber resposta do drone: ", d.AddressForSector)
+			fmt.Println("Erro ao receber resposta do drone: ID ", d.ID)
 			_ = conn.Close()
 			continue
 		}
 
+		if response.Text == "INVALID_COMMAND" {
+			fmt.Println("Requisição inválida")
+		}
+
 		if response.Text == "QUEUED" {
-			fmt.Println("Drone recebeu requisição:", d.AddressForSector)
+			fmt.Println("Drone recebeu requisição: ID ", d.ID)
 		}
 
 		_ = conn.Close()
@@ -132,14 +136,14 @@ func handleSensor(conn net.Conn) {
 func listenSensor() {
 	listener, err := net.Listen("tcp", ":6000")
 	if err != nil {
-		fmt.Println("Erro ao iniciar servidor (sensor):", err)
+		fmt.Println("Erro ao iniciar servidor (sensor): ", err)
 		return
 	}
 	defer func() {
 		_ = listener.Close()
 	}()
 
-	fmt.Println("Servidor (sensor) inicializado")
+	fmt.Println("Servidor inicializado (sensor)")
 
 	for {
 		conn, err := listener.Accept()
@@ -162,6 +166,7 @@ func removeSector(address string) {
 
 	for _, s := range sectors {
 		if s.AddressForSector == address {
+			fmt.Println("Setor removido: ", address)
 			continue
 		}
 
@@ -237,19 +242,19 @@ func handleSector(conn net.Conn) {
 func listenSectors() {
 	listener, err := net.Listen("tcp", ":5000")
 	if err != nil {
-		fmt.Println("Erro ao iniciar servidor (setor):", err)
+		fmt.Println("Erro ao iniciar servidor (setor): ", err)
 		return
 	}
 	defer func() {
 		_ = listener.Close()
 	}()
 
-	fmt.Println("Servidor (setor) inicializado na porta 5000")
+	fmt.Println("Servidor inicializado (setor)")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Erro ao se conectar com setor:", err)
+			fmt.Println("Erro ao se conectar com setor: ", err)
 			continue
 		}
 
@@ -299,9 +304,7 @@ func loadSectors(path string) error {
 		filtered = append(filtered, s)
 	}
 
-	mu.Lock()
 	sectors = filtered
-	mu.Unlock()
 
 	return nil
 } // Finalizada
@@ -320,9 +323,7 @@ func loadDrones(path string) error {
 		return err
 	}
 
-	mu.Lock()
 	drones = config
-	mu.Unlock()
 
 	return nil
 } // Finalizada
