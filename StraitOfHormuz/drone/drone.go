@@ -40,7 +40,6 @@ type Message struct {
 }
 
 var (
-	clock    int
 	drone    Drone
 	mu       sync.Mutex
 	drones   []Drone
@@ -77,7 +76,7 @@ func warnDrones(text string, request Request) {
 	}
 
 	for _, d := range currentDrones {
-		conn, err := net.DialTimeout("tcp", d.AddressForSector, 2*time.Second)
+		conn, err := net.DialTimeout("tcp", d.AddressForDrone, 2*time.Second)
 		if err != nil {
 			fmt.Println("Erro ao criar conexão com drone:", err)
 			continue

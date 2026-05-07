@@ -40,12 +40,13 @@ type Message struct {
 }
 
 type Drone struct {
-	Address string  `json:"address"`
-	ID      int     `json:"id"`
-	X       float64 `json:"x"`
-	Y       float64 `json:"y"`
-	IsBusy  bool    `json:"is_busy"`
-	IsOn    bool    `json:"is_on"`
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForDrone  string  `json:"address_for_drone"`
+	ID               int     `json:"id"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
+	IsBusy           bool    `json:"is_busy"`
+	IsOn             bool    `json:"is_on"`
 }
 
 var (
@@ -78,9 +79,9 @@ func requestDrone(sensor Sensor) {
 	mu.Unlock()
 
 	for _, d := range currentDrones {
-		conn, err := net.DialTimeout("tcp", d.Address, 2*time.Second)
+		conn, err := net.DialTimeout("tcp", d.AddressForSector, 2*time.Second)
 		if err != nil {
-			fmt.Println("Drone indisponível: ", d.Address)
+			fmt.Println("Drone indisponível: ", d.AddressForSector)
 			continue
 		}
 
@@ -88,7 +89,7 @@ func requestDrone(sensor Sensor) {
 		decoder := json.NewDecoder(conn)
 
 		if err := encoder.Encode(request); err != nil {
-			fmt.Println("Erro ao enviar requisição para drone: ", d.Address)
+			fmt.Println("Erro ao enviar requisição para drone: ", d.AddressForSector)
 			_ = conn.Close()
 			continue
 		}
@@ -96,13 +97,13 @@ func requestDrone(sensor Sensor) {
 		var response Message
 
 		if err := decoder.Decode(&response); err != nil {
-			fmt.Println("Erro ao receber resposta do drone: ", d.Address)
+			fmt.Println("Erro ao receber resposta do drone: ", d.AddressForSector)
 			_ = conn.Close()
 			continue
 		}
 
 		if response.Text == "QUEUED" {
-			fmt.Println("Drone recebeu requisição:", d.Address)
+			fmt.Println("Drone recebeu requisição:", d.AddressForSector)
 		}
 
 		_ = conn.Close()

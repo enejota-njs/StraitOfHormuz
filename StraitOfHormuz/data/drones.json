@@ -1,12 +1,18 @@
 [
   {
-    "address_for_sector": "10.0.0.1:7001",
-    "address_for_drone": "10.0.0.1:8001",
+    "address_for_sector": "172.65.213.138:7001",
+    "address_for_drone": "172.65.213.138:8001",
     "id": 1
-    },
+  },
   {
-    "address_for_sector": "10.0.0.1:7002",
-    "address_for_drone": "10.0.0.1:8002",
+    "address_for_sector": "172.65.213.146:7002",
+    "address_for_drone": "172.65.213.146:8002",
     "id": 2
+  },
+  {
+    "address_for_sector": "172.65.213.219:7003",
+    "address_for_drone": "172.65.213.219:8003",
+    "id": 3
   }
+
 ]
