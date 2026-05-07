@@ -41,7 +41,6 @@ type Message struct {
 }
 
 var (
-	clock    int
 	drone    Drone
 	mu       sync.Mutex
 	drones   []Drone

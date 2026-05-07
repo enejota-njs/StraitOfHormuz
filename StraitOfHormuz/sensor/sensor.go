@@ -20,6 +20,7 @@ type Sensor struct {
 }
 
 type Sector struct {
+	ID               int     `json:"ID"`
 	AddressForSector string  `json:"address_for_sector"`
 	AddressForSensor string  `json:"address_for_sensor"`
 	Left             float64 `json:"left"`

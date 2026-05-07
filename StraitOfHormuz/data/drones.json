@@ -1,17 +1,17 @@
 [
   {
-    "address_for_sector": "172.65.213.138:7001",
-    "address_for_drone": "172.65.213.138:8001",
+    "address_for_sector": "localhost:5006",
+    "address_for_drone": "localhost:5007",
     "id": 1
   },
   {
-    "address_for_sector": "172.65.213.146:7002",
-    "address_for_drone": "172.65.213.146:8002",
+    "address_for_sector": "localhost:5008",
+    "address_for_drone": "localhost:5009",
     "id": 2
   },
   {
-    "address_for_sector": "172.65.213.219:7003",
-    "address_for_drone": "172.65.213.219:8003",
+    "address_for_sector": "localhost:5010",
+    "address_for_drone": "localhost:5011",
     "id": 3
   }
 

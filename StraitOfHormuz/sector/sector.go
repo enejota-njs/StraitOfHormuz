@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -27,6 +28,7 @@ type Request struct {
 }
 
 type Sector struct {
+	ID               int     `json:"ID"`
 	AddressForSector string  `json:"address_for_sector"`
 	AddressForSensor string  `json:"address_for_sensor"`
 	Left             float64 `json:"left"`
@@ -55,6 +57,7 @@ var (
 	requestID int
 	drones    []Drone
 	mu        sync.Mutex
+	sector    Sector
 )
 
 // == DRONE
@@ -134,7 +137,9 @@ func handleSensor(conn net.Conn) {
 } // Finalizada
 
 func listenSensor() {
-	listener, err := net.Listen("tcp", ":6000")
+	_, port, _ := net.SplitHostPort(sector.AddressForSensor)
+
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		fmt.Println("Erro ao iniciar servidor (sensor): ", err)
 		return
@@ -240,7 +245,9 @@ func handleSector(conn net.Conn) {
 } // Finalizada
 
 func listenSectors() {
-	listener, err := net.Listen("tcp", ":5000")
+	_, port, _ := net.SplitHostPort(sector.AddressForSector)
+
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		fmt.Println("Erro ao iniciar servidor (setor): ", err)
 		return
@@ -264,18 +271,7 @@ func listenSectors() {
 
 // == LOAD DATA
 
-func getIP() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = conn.Close() }()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	return localAddr.IP.String()
-} // Finalizada
-
-func loadSectors(path string) error {
+func loadSectors(path string, myID int) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -287,17 +283,11 @@ func loadSectors(path string) error {
 		return err
 	}
 
-	myIP := getIP()
-
 	var filtered []Sector
 
 	for _, s := range config {
-		host, _, err := net.SplitHostPort(s.AddressForSector)
-		if err != nil {
-			continue
-		}
-
-		if host == myIP {
+		if s.ID == myID {
+			sector = s
 			continue
 		}
 
@@ -331,10 +321,19 @@ func loadDrones(path string) error {
 // == MAIN
 
 func main() {
+	if len(os.Args) < 2 {
+		return
+	}
+
+	id, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		return
+	}
+
 	sectorsPath := "../data/sectors.json"
 	dronesPath := "../data/drones.json"
 
-	if loadSectors(sectorsPath) != nil {
+	if loadSectors(sectorsPath, id) != nil {
 		return
 	}
 
