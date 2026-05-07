@@ -198,8 +198,6 @@ func dispatchRequests() {
 				break
 			}
 		}
-
-		time.Sleep(1 * time.Second)
 	}
 }
 

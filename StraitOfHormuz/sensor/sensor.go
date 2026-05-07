@@ -76,7 +76,7 @@ func runSensor() {
 			}
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -149,7 +149,7 @@ func register() bool {
 
 	val, err = strconv.ParseFloat(yString, 64)
 	if err != nil {
-		fmt.Println("Valor inválido")
+		fmt.Println("Valor Y inválido")
 		return false
 	}
 
