@@ -10,12 +10,6 @@ import (
 	"time"
 )
 
-type State struct {
-	Drones  []Drone  `json:"drones"`
-	Sensors []Sensor `json:"sensors"`
-	Sectors []Sector `json:"sectors"`
-}
-
 type Sensor struct {
 	Type       string  `json:"type"`
 	X          float64 `json:"x"`
@@ -321,39 +315,37 @@ func loadDrones(path string) error {
 // == SAVE DATA
 
 func saveSectorState(path string) error {
-	file, err := os.Open(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
+	var sectorsList []Sector
 
-	state := State{}
+	file, err := os.Open(path)
 
 	if err == nil {
 		defer func() {
 			_ = file.Close()
 		}()
 
-		_ = json.NewDecoder(file).Decode(&state)
+		_ = json.NewDecoder(file).Decode(&sectorsList)
 	}
 
 	exists := false
 
-	for i := range state.Sectors {
-		if state.Sectors[i].ID == sector.ID {
-			state.Sectors[i] = sector
+	for i := range sectorsList {
+		if sectorsList[i].ID == sector.ID {
+			sectorsList[i] = sector
 			exists = true
 			break
 		}
 	}
 
 	if !exists {
-		state.Sectors = append(state.Sectors, sector)
+		sectorsList = append(sectorsList, sector)
 	}
 
 	output, err := os.Create(path)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		_ = output.Close()
 	}()
@@ -361,7 +353,7 @@ func saveSectorState(path string) error {
 	encoder := json.NewEncoder(output)
 	encoder.SetIndent("", "  ")
 
-	return encoder.Encode(state)
+	return encoder.Encode(sectorsList)
 }
 
 // == MAIN
@@ -378,7 +370,7 @@ func main() {
 
 	sectorsPath := "../data/sectors.json"
 	dronesPath := "../data/drones.json"
-	savePath := "../data/world.json"
+	savePath := "../data/interface_sectors.json"
 
 	if loadSectors(sectorsPath, id) != nil {
 		return

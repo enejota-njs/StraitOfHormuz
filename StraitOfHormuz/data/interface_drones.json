@@ -1,0 +1,20 @@
+[
+  {
+    "address_for_sector": "localhost:5010",
+    "address_for_drone": "localhost:5011",
+    "id": 2,
+    "x": 20,
+    "y": 40,
+    "is_busy": true,
+    "is_on": true
+  },
+  {
+    "address_for_sector": "localhost:5008",
+    "address_for_drone": "localhost:5009",
+    "id": 1,
+    "x": 100,
+    "y": 76,
+    "is_busy": true,
+    "is_on": true
+  }
+]

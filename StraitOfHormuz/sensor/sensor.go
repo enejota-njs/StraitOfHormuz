@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-type State struct {
-	Drones  []Drone  `json:"drones"`
-	Sensors []Sensor `json:"sensors"`
-	Sectors []Sector `json:"sectors"`
-}
-
 type Drone struct {
 	AddressForSector string  `json:"address_for_sector"`
 	AddressForDrone  string  `json:"address_for_drone"`
@@ -190,41 +184,39 @@ func register() bool {
 // == SAVE DATA
 
 func saveSensorState(path string) error {
-	file, err := os.Open(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
+	var sensorsList []Sensor
 
-	state := State{}
+	file, err := os.Open(path)
 
 	if err == nil {
 		defer func() {
 			_ = file.Close()
 		}()
 
-		_ = json.NewDecoder(file).Decode(&state)
+		_ = json.NewDecoder(file).Decode(&sensorsList)
 	}
 
 	exists := false
 
-	for i := range state.Sensors {
-		if state.Sensors[i].X == sensor.X &&
-			state.Sensors[i].Y == sensor.Y {
+	for i := range sensorsList {
+		if sensorsList[i].X == sensor.X &&
+			sensorsList[i].Y == sensor.Y {
 
-			state.Sensors[i] = sensor
+			sensorsList[i] = sensor
 			exists = true
 			break
 		}
 	}
 
 	if !exists {
-		state.Sensors = append(state.Sensors, sensor)
+		sensorsList = append(sensorsList, sensor)
 	}
 
 	output, err := os.Create(path)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		_ = output.Close()
 	}()
@@ -232,7 +224,7 @@ func saveSensorState(path string) error {
 	encoder := json.NewEncoder(output)
 	encoder.SetIndent("", "  ")
 
-	return encoder.Encode(state)
+	return encoder.Encode(sensorsList)
 }
 
 // == MAIN
@@ -246,7 +238,7 @@ func main() {
 		return
 	}
 
-	savePath := "../data/world.json"
+	savePath := "../data/interface_sensors.json"
 
 	_ = saveSensorState(savePath)
 
@@ -260,16 +252,3 @@ func main() {
 
 	select {}
 }
-
-/*
-  {
-    "address_for_sector": "localhost:5008",
-    "address_for_drone": "localhost:5009",
-    "id": 2
-  },
-  {
-    "address_for_sector": "localhost:5010",
-    "address_for_drone": "localhost:5011",
-    "id": 3
-  }
-*/

@@ -1,7 +1,12 @@
 [
   {
-    "address_for_sector": "localhost:5006",
-    "address_for_drone": "localhost:5007",
+    "address_for_sector": "localhost:5008",
+    "address_for_drone": "localhost:5009",
     "id": 1
+  },
+  {
+    "address_for_sector": "localhost:5010",
+    "address_for_drone": "localhost:5011",
+    "id": 2
   }
 ]

@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-type State struct {
-	Drones  []Drone  `json:"drones"`
-	Sensors []Sensor `json:"sensors"`
-	Sectors []Sector `json:"sectors"`
-}
-
 type Sector struct {
 	ID               int     `json:"ID"`
 	AddressForSector string  `json:"address_for_sector"`
@@ -466,39 +460,37 @@ func loadDrones(path string, myID int) error {
 // == SAVE DATA
 
 func saveDroneState(path string) error {
-	file, err := os.Open(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
+	var dronesList []Drone
 
-	state := State{}
+	file, err := os.Open(path)
 
 	if err == nil {
 		defer func() {
 			_ = file.Close()
 		}()
 
-		_ = json.NewDecoder(file).Decode(&state)
+		_ = json.NewDecoder(file).Decode(&dronesList)
 	}
 
 	exists := false
 
-	for i := range state.Drones {
-		if state.Drones[i].ID == drone.ID {
-			state.Drones[i] = drone
+	for i := range dronesList {
+		if dronesList[i].ID == drone.ID {
+			dronesList[i] = drone
 			exists = true
 			break
 		}
 	}
 
 	if !exists {
-		state.Drones = append(state.Drones, drone)
+		dronesList = append(dronesList, drone)
 	}
 
 	output, err := os.Create(path)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		_ = output.Close()
 	}()
@@ -506,7 +498,7 @@ func saveDroneState(path string) error {
 	encoder := json.NewEncoder(output)
 	encoder.SetIndent("", "  ")
 
-	return encoder.Encode(state)
+	return encoder.Encode(dronesList)
 }
 
 func saveDroneLoop(path string) {
@@ -536,7 +528,7 @@ func main() {
 	}
 
 	dronesPath := "../data/drones.json"
-	savePath := "../data/world.json"
+	savePath := "../data/interface_drones.json"
 
 	if loadDrones(dronesPath, id) != nil {
 		return
