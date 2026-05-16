@@ -11,26 +11,7 @@ import (
 	"time"
 )
 
-type Sector struct {
-	ID               int     `json:"ID"`
-	AddressForSector string  `json:"address_for_sector"`
-	AddressForSensor string  `json:"address_for_sensor"`
-	Left             float64 `json:"left"`
-	Right            float64 `json:"right"`
-	Top              float64 `json:"top"`
-	Bottom           float64 `json:"bottom"`
-}
-
-type Sensor struct {
-	Type       string  `json:"type"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
-	IsActive   bool    `json:"is_active"`
-	IsCritical bool    `json:"is_critical"`
-}
-
 type Request struct {
-	SectorID   int     `json:"sector_id"`
 	ID         int     `json:"origin_id"`
 	Status     string  `json:"status"`
 	X          float64 `json:"x"`
