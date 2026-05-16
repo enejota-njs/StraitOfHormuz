@@ -30,13 +30,13 @@ type Sensor struct {
 }
 
 type Sector struct {
-	ID               int     `json:"ID"`
-	AddressForSector string  `json:"address_for_sector"`
-	AddressForSensor string  `json:"address_for_sensor"`
-	Left             float64 `json:"left"`
-	Right            float64 `json:"right"`
-	Top              float64 `json:"top"`
-	Bottom           float64 `json:"bottom"`
+	ID                       int     `json:"ID"`
+	AddressForSectorAndDrone string  `json:"address_for_sector_and_drone"`
+	AddressForSensor         string  `json:"address_for_sensor"`
+	Left                     float64 `json:"left"`
+	Right                    float64 `json:"right"`
+	Top                      float64 `json:"top"`
+	Bottom                   float64 `json:"bottom"`
 }
 
 var (
@@ -183,48 +183,21 @@ func register() bool {
 
 // == SAVE DATA
 
-func saveSensorState(path string) error {
-	var sensorsList []Sensor
+func sendSensorToInterface(serverAddress string) {
+	mu.Lock()
+	currentSensor := sensor
+	mu.Unlock()
 
-	file, err := os.Open(path)
-
-	if err == nil {
-		defer func() {
-			_ = file.Close()
-		}()
-
-		_ = json.NewDecoder(file).Decode(&sensorsList)
-	}
-
-	exists := false
-
-	for i := range sensorsList {
-		if sensorsList[i].X == sensor.X &&
-			sensorsList[i].Y == sensor.Y {
-
-			sensorsList[i] = sensor
-			exists = true
-			break
-		}
-	}
-
-	if !exists {
-		sensorsList = append(sensorsList, sensor)
-	}
-
-	output, err := os.Create(path)
+	conn, err := net.DialTimeout("tcp", serverAddress, 2*time.Second)
 	if err != nil {
-		return err
+		fmt.Println("Erro ao conectar interface:", err)
+		return
 	}
+	defer conn.Close()
 
-	defer func() {
-		_ = output.Close()
-	}()
-
-	encoder := json.NewEncoder(output)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(sensorsList)
+	if err := json.NewEncoder(conn).Encode(currentSensor); err != nil {
+		fmt.Println("Erro ao enviar sensor para interface:", err)
+	}
 }
 
 // == MAIN
@@ -238,9 +211,7 @@ func main() {
 		return
 	}
 
-	savePath := "../data/interface_sensors.json"
-
-	_ = saveSensorState(savePath)
+	sendSensorToInterface("localhost:9300")
 
 	sectorsPath := "../data/sectors.json"
 
