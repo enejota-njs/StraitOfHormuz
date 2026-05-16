@@ -45,9 +45,9 @@ type Message struct {
 }
 
 type Drone struct {
+	ID               int     `json:"id"`
 	AddressForSector string  `json:"address_for_sector"`
 	AddressForDrone  string  `json:"address_for_drone"`
-	ID               int     `json:"id"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
 	IsBusy           bool    `json:"is_busy"`
@@ -55,12 +55,12 @@ type Drone struct {
 }
 
 var (
-	clock     int
-	sectors   []Sector
-	requestID int
-	drones    []Drone
 	mu        sync.Mutex
 	sector    Sector
+	clock     int
+	requestID int
+	sectors   []Sector
+	drones    []Drone
 	requests  []Request
 )
 
@@ -78,7 +78,7 @@ func updateClock(receivedClock int) int {
 	return clock
 }
 
-func sortQueue(request Request) {
+func addRequestToQueue(request Request) {
 	for _, r := range requests {
 		if r.SectorID == request.SectorID && r.ID == request.ID {
 			return
@@ -134,7 +134,7 @@ func sendRequest(sensor Sensor) {
 		Clock:      clockValue,
 	}
 
-	sortQueue(request)
+	addRequestToQueue(request)
 
 	message := Message{
 		Text:    "REQUEST",
@@ -142,8 +142,8 @@ func sendRequest(sensor Sensor) {
 		Clock:   clockValue,
 	}
 
-	currentSectors := sectors
-	currentDrones := drones
+	currentSectors := append([]Sector(nil), sectors...)
+	currentDrones := append([]Drone(nil), drones...)
 
 	mu.Unlock()
 
@@ -171,7 +171,8 @@ func sendRequest(sensor Sensor) {
 			continue
 		}
 
-		if response.Text == "QUEDED" {
+		if response.Text == "QUEUED" {
+			fmt.Println("Listada")
 			_ = conn.Close()
 		}
 	}
@@ -200,11 +201,14 @@ func sendRequest(sensor Sensor) {
 			continue
 		}
 
-		if response.Text == "QUEDED" {
+		if response.Text == "QUEUED" {
+			fmt.Println("Listada")
 			_ = conn.Close()
 		}
 	}
 }
+
+// == SENSOR
 
 func handleSensor(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
@@ -248,48 +252,7 @@ func listenSensor() {
 	}
 }
 
-func monitorSectors() {
-	for {
-		mu.Lock()
-		currentSectors := sectors
-		mu.Unlock()
-
-		for _, s := range currentSectors {
-			conn, err := net.DialTimeout("tcp", s.AddressForSector, 2*time.Second)
-			if err != nil {
-				fmt.Println("Setor offline: ", s.ID)
-				continue
-			}
-
-			encoder := json.NewEncoder(conn)
-			decoder := json.NewDecoder(conn)
-
-			message := Message{Text: "PING"}
-
-			if encoder.Encode(message) != nil {
-				_ = conn.Close()
-				fmt.Println("Falha ao enviar PING para setor: ", s.ID)
-				continue
-			}
-
-			if decoder.Decode(&message) != nil {
-				_ = conn.Close()
-				fmt.Println("Falha ao receber PONG do setor: ", s.ID)
-				continue
-			}
-
-			if message.Text != "PONG" {
-				_ = conn.Close()
-				fmt.Println("Resposta inválida do setor: ", s.ID)
-				continue
-			}
-
-			_ = conn.Close()
-		}
-
-		time.Sleep(5 * time.Second)
-	}
-}
+// == SECTOR
 
 func handleSector(conn net.Conn) {
 	defer func() { _ = conn.Close() }()
@@ -306,17 +269,14 @@ func handleSector(conn net.Conn) {
 	switch message.Text {
 	case "REQUEST":
 		mu.Lock()
-		updateClock(message.Clock)
-		sortQueue(message.Request)
+		currentClock := updateClock(message.Clock)
+		addRequestToQueue(message.Request)
 		mu.Unlock()
+
 		_ = encoder.Encode(Message{
 			Text:  "QUEUED",
-			Clock: clock,
+			Clock: currentClock,
 		})
-		
-	case "PING":
-		message.Text = "PONG"
-		_ = encoder.Encode(message)
 	}
 }
 
@@ -344,6 +304,8 @@ func listenSectors() {
 		go handleSector(conn)
 	}
 }
+
+// == LOAD DATA
 
 func loadSectors(path string, myID int) error {
 	file, err := os.Open(path)
@@ -392,47 +354,7 @@ func loadDrones(path string) error {
 	return nil
 }
 
-func saveSectorState(path string) error {
-	var sectorsList []Sector
-
-	file, err := os.Open(path)
-
-	if err == nil {
-		defer func() {
-			_ = file.Close()
-		}()
-
-		_ = json.NewDecoder(file).Decode(&sectorsList)
-	}
-
-	exists := false
-
-	for i := range sectorsList {
-		if sectorsList[i].ID == sector.ID {
-			sectorsList[i] = sector
-			exists = true
-			break
-		}
-	}
-
-	if !exists {
-		sectorsList = append(sectorsList, sector)
-	}
-
-	output, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		_ = output.Close()
-	}()
-
-	encoder := json.NewEncoder(output)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(sectorsList)
-}
+// == MAIN
 
 func main() {
 	if len(os.Args) < 2 {
@@ -446,7 +368,6 @@ func main() {
 
 	sectorsPath := "../data/sectors.json"
 	dronesPath := "../data/drones.json"
-	//savePath := "../data/interface_sectors.json"
 
 	if loadSectors(sectorsPath, id) != nil {
 		return
@@ -455,11 +376,7 @@ func main() {
 		return
 	}
 
-	//_ = saveSectorState(savePath)
-
 	go listenSectors()
-	go monitorSectors()
-
 	go listenSensor()
 
 	select {}
