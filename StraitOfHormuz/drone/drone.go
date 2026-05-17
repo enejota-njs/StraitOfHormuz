@@ -559,12 +559,32 @@ func loadDrones(path string, myID int) error {
 
 // == SAVE DATA
 
-func sendDroneToInterface(serverAddress string) {
+func sendDroneToInterface(path string) {
 	mu.Lock()
 	currentDrone := drone
 	mu.Unlock()
 
-	conn, err := net.DialTimeout("tcp", serverAddress, 2*time.Second)
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Erro ao abrir interface.json:", err)
+		return
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	var config []struct {
+		Sectors string `json:"sectors"`
+		Drones  string `json:"drones"`
+		Sensors string `json:"sensors"`
+	}
+
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Println("Erro ao ler interface.json:", err)
+		return
+	}
+
+	conn, err := net.DialTimeout("tcp", config[0].Drones, 2*time.Second)
 	if err != nil {
 		fmt.Println("Erro ao conectar interface:", err)
 		return
@@ -578,9 +598,9 @@ func sendDroneToInterface(serverAddress string) {
 	}
 }
 
-func sendDroneLoop(serverAddress string) {
+func sendDroneLoop(path string) {
 	for {
-		sendDroneToInterface(serverAddress)
+		sendDroneToInterface(path)
 		time.Sleep(500 * time.Millisecond)
 	}
 }
@@ -597,8 +617,9 @@ func main() {
 		return
 	}
 
-	dronesPath := "../data/drones.json"
-	sectorsPath := "../data/sectors.json"
+	dronesPath := "../data/initialization/drones.json"
+	sectorsPath := "../data/initialization/sectors.json"
+	intefacePath := "../data/initialization/interface.json"
 
 	if loadDrones(dronesPath, id) != nil {
 		return
@@ -612,7 +633,7 @@ func main() {
 
 	go dispatchRequests()
 
-	go sendDroneLoop("localhost:9100")
+	go sendDroneLoop(intefacePath)
 
 	select {}
 }

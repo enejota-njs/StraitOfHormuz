@@ -11,17 +11,8 @@ import (
 	"time"
 )
 
-type Drone struct {
-	AddressForSector string  `json:"address_for_sector"`
-	AddressForDrone  string  `json:"address_for_drone"`
-	ID               int     `json:"id"`
-	X                float64 `json:"x"`
-	Y                float64 `json:"y"`
-	IsBusy           bool    `json:"is_busy"`
-	IsOn             bool    `json:"is_on"`
-}
-
 type Sensor struct {
+	ID         int     `json:"id"`
 	Type       string  `json:"type"`
 	X          float64 `json:"x"`
 	Y          float64 `json:"y"`
@@ -41,12 +32,9 @@ type Sector struct {
 }
 
 var (
-	sensor  Sensor
-	sector  string
-	mu      sync.Mutex
-	sensors = []string{
-		"RadarCosteiro",
-	}
+	sensor Sensor
+	sector string
+	mu     sync.Mutex
 )
 
 // == SENSOR
@@ -137,59 +125,81 @@ func findSector(path string) bool {
 
 // == REGISTER
 
-func register() bool {
-	typeString := os.Args[1]
-	xString := os.Args[2]
-	yString := os.Args[3]
+func register(path string) bool {
+	if len(os.Args) < 2 {
+		fmt.Println("Informe o ID do sensor")
+		return false
+	}
 
-	validType := false
-	for _, s := range sensors {
-		if s == typeString {
-			validType = true
-			break
+	id, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		fmt.Println("ID inválido")
+		return false
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Erro ao abrir sensors.json:", err)
+		return false
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	var config []Sensor
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Println("Erro ao ler sensors.json:", err)
+		return false
+	}
+
+	for _, s := range config {
+		if s.ID == id {
+			sensor = Sensor{
+				ID:         s.ID,
+				Type:       s.Type,
+				X:          s.X,
+				Y:          s.Y,
+				IsActive:   false,
+				IsCritical: false,
+			}
+
+			fmt.Println("[SENSOR] Sensor carregado:", sensor)
+			return true
 		}
 	}
 
-	if !validType {
-		fmt.Println("Tipo de sensor inválido")
-		return false
-	}
-
-	val, err := strconv.ParseFloat(xString, 64)
-	if err != nil {
-		fmt.Println("Valor X inválido")
-		return false
-	}
-
-	x := val
-
-	val, err = strconv.ParseFloat(yString, 64)
-	if err != nil {
-		fmt.Println("Valor Y inválido")
-		return false
-	}
-
-	y := val
-
-	sensor = Sensor{
-		Type:       typeString,
-		X:          x,
-		Y:          y,
-		IsActive:   false,
-		IsCritical: false,
-	}
-
-	return true
+	fmt.Println("Sensor não encontrado com ID:", id)
+	return false
 }
 
 // == SAVE DATA
 
-func sendSensorToInterface() {
+func sendSensorToInterface(path string) {
 	mu.Lock()
 	currentSensor := sensor
 	mu.Unlock()
 
-	conn, err := net.DialTimeout("tcp", "localhost:9300", 2*time.Second)
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Erro ao abrir interface.json:", err)
+		return
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	var config []struct {
+		Sectors string `json:"sectors"`
+		Drones  string `json:"drones"`
+		Sensors string `json:"sensors"`
+	}
+
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Println("Erro ao ler interface.json:", err)
+		return
+	}
+
+	conn, err := net.DialTimeout("tcp", config[0].Sensors, 2*time.Second)
 	if err != nil {
 		fmt.Println("Erro ao conectar interface:", err)
 		return
@@ -210,16 +220,18 @@ func main() {
 		return
 	}
 
-	sectorsPath := "../data/sectors.json"
+	sensorsPath := "../data/initialization/sensors.json"
+	sectorsPath := "../data/initialization/sectors.json"
+	intefacePath := "../data/initialization/interface.json"
+
+	if !register(sensorsPath) {
+		return
+	}
 	if !findSector(sectorsPath) {
 		return
 	}
 
-	if !register() {
-		return
-	}
-
-	sendSensorToInterface()
+	sendSensorToInterface(intefacePath)
 
 	go runSensor()
 

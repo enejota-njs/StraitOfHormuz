@@ -19,16 +19,18 @@ type Drone struct {
 }
 
 type Sector struct {
-	ID                       int     `json:"ID"`
-	AddressForSectorAndDrone string  `json:"address_for_sector_and_drone"`
-	AddressForSensor         string  `json:"address_for_sensor"`
-	Left                     float64 `json:"left"`
-	Right                    float64 `json:"right"`
-	Top                      float64 `json:"top"`
-	Bottom                   float64 `json:"bottom"`
+	ID               int     `json:"id"`
+	AddressForDrone  string  `json:"address_for_drone"`
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForSensor string  `json:"address_for_sensor"`
+	Left             float64 `json:"left"`
+	Right            float64 `json:"right"`
+	Top              float64 `json:"top"`
+	Bottom           float64 `json:"bottom"`
 }
 
 type Sensor struct {
+	ID         int     `json:"id"`
 	Type       string  `json:"type"`
 	X          float64 `json:"x"`
 	Y          float64 `json:"y"`
@@ -255,9 +257,9 @@ func listenSensors(port string, path string) {
 }
 
 func main() {
-	go listenDrones("9100", "../data/interface_drones.json")
-	go listenSectors("9200", "../data/interface_sectors.json")
-	go listenSensors("9300", "../data/interface_sensors.json")
+	go listenDrones("9100", "../data/interface/drones.json")
+	go listenSectors("9200", "../data/interface/sectors.json")
+	go listenSensors("9300", "../data/interface/sensors.json")
 
 	select {}
 }

@@ -1,37 +1,41 @@
 [
   {
     "id": 1,
-    "address_for_sector_and_drone": "localhost:5000",
-    "address_for_sensor": "localhost:5001",
-    "left": 0,
-    "right": 70,
+    "address_for_drone" : "localhost:5000",
+    "address_for_sector": "localhost:5001",
+    "address_for_sensor": "localhost:5002",
+    "left": 1,
+    "right": 50,
     "top": 100,
     "bottom": 0
   },
   {
     "id": 2,
-    "address_for_sector_and_drone": "localhost:5002",
-    "address_for_sensor": "localhost:5003",
-    "left": 71,
-    "right": 140,
+    "address_for_drone" : "localhost:5003",
+    "address_for_sector": "localhost:5004",
+    "address_for_sensor": "localhost:5005",
+    "left": 51,
+    "right": 100,
     "top": 100,
     "bottom": 0
   },
   {
     "id": 3,
-    "address_for_sector_and_drone": "localhost:5004",
-    "address_for_sensor": "localhost:5005",
-    "left": 141,
-    "right": 210,
+    "address_for_drone" : "localhost:5006",
+    "address_for_sector": "localhost:5007",
+    "address_for_sensor": "localhost:5008",
+    "left": 101,
+    "right": 150,
     "top": 100,
     "bottom": 0
   },
   {
     "id": 4,
-    "address_for_sector": "localhost:5006",
-    "address_for_sensor": "localhost:5007",
-    "left": 211,
-    "right": 300,
+    "address_for_drone" : "localhost:5009",
+    "address_for_sector": "localhost:5010",
+    "address_for_sensor": "localhost:5011",
+    "left": 151,
+    "right": 200,
     "top": 100,
     "bottom": 0
   }
