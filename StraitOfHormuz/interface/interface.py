@@ -4,11 +4,11 @@ import pygame
 MARGIN = 40
 SCALE = 4
 
-SECTORS_PATH = "../data/interface_sectors.json"
-DRONES_PATH = "../data/interface_drones.json"
-SENSORS_PATH = "../data/interface_sensors.json"
+SECTORS_PATH = "../data/interface/interface_sectors.json"
+DRONES_PATH = "../data/interface/interface_drones.json"
+SENSORS_PATH = "../data/interface/interface_sensors.json"
 
-DRONE_IMAGE_PATH = "../data/drone.webp"
+DRONE_IMAGE_PATH = "../data/images/drone.webp"
 
 
 def load_list(path):

@@ -30,13 +30,14 @@ type Sensor struct {
 }
 
 type Sector struct {
-	ID                       int     `json:"ID"`
-	AddressForSectorAndDrone string  `json:"address_for_sector_and_drone"`
-	AddressForSensor         string  `json:"address_for_sensor"`
-	Left                     float64 `json:"left"`
-	Right                    float64 `json:"right"`
-	Top                      float64 `json:"top"`
-	Bottom                   float64 `json:"bottom"`
+	ID               int     `json:"ID"`
+	AddressForDrone  string  `json:"address_for_drone"`
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForSensor string  `json:"address_for_sensor"`
+	Left             float64 `json:"left"`
+	Right            float64 `json:"right"`
+	Top              float64 `json:"top"`
+	Bottom           float64 `json:"bottom"`
 }
 
 var (
@@ -183,17 +184,19 @@ func register() bool {
 
 // == SAVE DATA
 
-func sendSensorToInterface(serverAddress string) {
+func sendSensorToInterface() {
 	mu.Lock()
 	currentSensor := sensor
 	mu.Unlock()
 
-	conn, err := net.DialTimeout("tcp", serverAddress, 2*time.Second)
+	conn, err := net.DialTimeout("tcp", "localhost:9300", 2*time.Second)
 	if err != nil {
 		fmt.Println("Erro ao conectar interface:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	if err := json.NewEncoder(conn).Encode(currentSensor); err != nil {
 		fmt.Println("Erro ao enviar sensor para interface:", err)
@@ -203,7 +206,12 @@ func sendSensorToInterface(serverAddress string) {
 // == MAIN
 
 func main() {
-	if len(os.Args) < 4 {
+	if len(os.Args) < 2 {
+		return
+	}
+
+	sectorsPath := "../data/sectors.json"
+	if !findSector(sectorsPath) {
 		return
 	}
 
@@ -211,13 +219,7 @@ func main() {
 		return
 	}
 
-	sendSensorToInterface("localhost:9300")
-
-	sectorsPath := "../data/sectors.json"
-
-	if !findSector(sectorsPath) {
-		return
-	}
+	sendSensorToInterface()
 
 	go runSensor()
 

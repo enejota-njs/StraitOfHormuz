@@ -29,13 +29,14 @@ type Request struct {
 }
 
 type Sector struct {
-	ID                       int     `json:"ID"`
-	AddressForSectorAndDrone string  `json:"address_for_sector_and_drone"`
-	AddressForSensor         string  `json:"address_for_sensor"`
-	Left                     float64 `json:"left"`
-	Right                    float64 `json:"right"`
-	Top                      float64 `json:"top"`
-	Bottom                   float64 `json:"bottom"`
+	ID               int     `json:"ID"`
+	AddressForDrone  string  `json:"address_for_drone"`
+	AddressForSector string  `json:"address_for_sector"`
+	AddressForSensor string  `json:"address_for_sensor"`
+	Left             float64 `json:"left"`
+	Right            float64 `json:"right"`
+	Top              float64 `json:"top"`
+	Bottom           float64 `json:"bottom"`
 }
 
 type Message struct {
@@ -65,6 +66,8 @@ var (
 	requests  []Request
 )
 
+// == CLOCK
+
 func incrementClock() int {
 	clock++
 	return clock
@@ -75,9 +78,11 @@ func updateClock(receivedClock int) int {
 		clock = receivedClock
 	}
 
-	clock++
+	incrementClock()
 	return clock
 }
+
+// == REQUEST
 
 func addRequestToQueue(request Request) {
 	for _, r := range requests {
@@ -149,7 +154,7 @@ func sendRequest(sensor Sensor) {
 	mu.Unlock()
 
 	for _, s := range currentSectors {
-		conn, err := net.DialTimeout("tcp", s.AddressForSectorAndDrone, 2*time.Second)
+		conn, err := net.DialTimeout("tcp", s.AddressForSector, 2*time.Second)
 		if err != nil {
 			fmt.Println("Setor indisponível: ID ", s.ID)
 			continue
@@ -242,6 +247,68 @@ func removeRequestDone(request Request) {
 	requests = filtered
 }
 
+func handleDrone(conn net.Conn) {
+	defer func() { _ = conn.Close() }()
+
+	encoder := json.NewEncoder(conn)
+	decoder := json.NewDecoder(conn)
+
+	var message Message
+
+	if decoder.Decode(&message) != nil {
+		return
+	}
+
+	switch message.Text {
+	case "ATTENDING":
+		mu.Lock()
+		currentClock := updateClock(message.Clock)
+		markRequestAsAttending(message.Request, message.Drone)
+		mu.Unlock()
+
+		_ = encoder.Encode(Message{
+			Text:  "UPDATED",
+			Clock: currentClock,
+		})
+
+	case "DONE":
+		mu.Lock()
+		currentClock := updateClock(message.Clock)
+		removeRequestDone(message.Request)
+		mu.Unlock()
+
+		_ = encoder.Encode(Message{
+			Text:  "REMOVED",
+			Clock: currentClock,
+		})
+	}
+}
+
+func listenDrone() {
+	_, port, _ := net.SplitHostPort(sector.AddressForDrone)
+
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		fmt.Println("Erro ao iniciar servidor (drone): ", err)
+		return
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	fmt.Println("Servidor inicializado (drone)")
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Erro ao se conectar com drone: ", err)
+			continue
+		}
+
+		go handleDrone(conn)
+	}
+}
+
 // == SENSOR
 
 func handleSensor(conn net.Conn) {
@@ -311,33 +378,11 @@ func handleSector(conn net.Conn) {
 			Text:  "QUEUED",
 			Clock: currentClock,
 		})
-
-	case "ATTENDING":
-		mu.Lock()
-		currentClock := updateClock(message.Clock)
-		markRequestAsAttending(message.Request, message.Drone)
-		mu.Unlock()
-
-		_ = encoder.Encode(Message{
-			Text:  "UPDATED",
-			Clock: currentClock,
-		})
-
-	case "DONE":
-		mu.Lock()
-		currentClock := updateClock(message.Clock)
-		removeRequestDone(message.Request)
-		mu.Unlock()
-
-		_ = encoder.Encode(Message{
-			Text:  "REMOVED",
-			Clock: currentClock,
-		})
 	}
 }
 
 func listenSectors() {
-	_, port, _ := net.SplitHostPort(sector.AddressForSectorAndDrone)
+	_, port, _ := net.SplitHostPort(sector.AddressForSector)
 
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -412,16 +457,18 @@ func loadDrones(path string) error {
 
 // == SAVE DATA
 
-func sendSectorToInterface(serverAddress string) {
-	conn, err := net.DialTimeout("tcp", serverAddress, 2*time.Second)
+func sendSectorToInterface() {
+	conn, err := net.DialTimeout("tcp", "localhost:9200", 2*time.Second)
 	if err != nil {
-		fmt.Println("Erro ao conectar interface:", err)
+		fmt.Println("Erro ao conectar interface: ", err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	if err := json.NewEncoder(conn).Encode(sector); err != nil {
-		fmt.Println("Erro ao enviar setor para interface:", err)
+		fmt.Println("Erro ao enviar setor para interface: ", err)
 	}
 }
 
@@ -447,10 +494,11 @@ func main() {
 		return
 	}
 
-	sendSectorToInterface("localhost:9200")
+	sendSectorToInterface()
 
-	go listenSectors()
 	go listenSensor()
+	go listenSectors()
+	go listenDrone()
 
 	select {}
 }
