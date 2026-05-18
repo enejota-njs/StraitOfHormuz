@@ -1,0 +1,29 @@
+[
+  {
+    "sector_id": 1,
+    "origin_id": 1,
+    "status": "PENDING",
+    "x": 10,
+    "y": 20,
+    "is_critical": true,
+    "clock": 12
+  },
+  {
+    "sector_id": 2,
+    "origin_id": 2,
+    "status": "PENDING",
+    "x": 66,
+    "y": 45,
+    "is_critical": true,
+    "clock": 20
+  },
+  {
+    "sector_id": 2,
+    "origin_id": 3,
+    "status": "PENDING",
+    "x": 66,
+    "y": 45,
+    "is_critical": false,
+    "clock": 26
+  }
+]

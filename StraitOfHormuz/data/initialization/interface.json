@@ -2,6 +2,7 @@
   {
     "sectors" : "localhost:9001",
     "drones" : "localhost:9002",
-    "sensors" : "localhost:9003"
+    "sensors" : "localhost:9003",
+    "requests": "localhost:9004"
   }
 ]

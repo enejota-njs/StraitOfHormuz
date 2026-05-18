@@ -10,22 +10,22 @@
     "bottom": 0
   },
   {
-    "id": 1,
-    "address_for_drone": "localhost:5000",
-    "address_for_sector": "localhost:5001",
-    "address_for_sensor": "localhost:5002",
-    "left": 1,
-    "right": 50,
-    "top": 100,
-    "bottom": 0
-  },
-  {
     "id": 3,
     "address_for_drone": "localhost:5006",
     "address_for_sector": "localhost:5007",
     "address_for_sensor": "localhost:5008",
     "left": 101,
     "right": 150,
+    "top": 100,
+    "bottom": 0
+  },
+  {
+    "id": 1,
+    "address_for_drone": "localhost:5000",
+    "address_for_sector": "localhost:5001",
+    "address_for_sensor": "localhost:5002",
+    "left": 1,
+    "right": 50,
     "top": 100,
     "bottom": 0
   },

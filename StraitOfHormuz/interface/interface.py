@@ -3,10 +3,12 @@ import pygame
 
 MARGIN = 40
 SCALE = 4
+SIDEBAR_WIDTH = 300
 
 SECTORS_PATH = "../data/interface/sectors.json"
 DRONES_PATH = "../data/interface/drones.json"
 SENSORS_PATH = "../data/interface/sensors.json"
+REQUESTS_PATH = "../data/interface/requests.json"
 
 DRONE_IMAGE_PATH = "../data/images/drone.webp"
 
@@ -30,6 +32,7 @@ def load_world():
         "sectors": load_list(SECTORS_PATH),
         "drones": load_list(DRONES_PATH),
         "sensors": load_list(SENSORS_PATH),
+        "requests": load_list(REQUESTS_PATH),
     }
 
 
@@ -47,10 +50,11 @@ def get_world_limits(sectors):
 
 
 def get_screen_size(min_x, max_x, min_y, max_y):
-    width = int((max_x - min_x) * SCALE + 2 * MARGIN)
+    world_width = int((max_x - min_x) * SCALE + 2 * MARGIN)
     height = int((max_y - min_y) * SCALE + 2 * MARGIN)
-
-    return width, height
+    
+    total_width = world_width + SIDEBAR_WIDTH
+    return total_width, max(height, 400) # Garante uma altura mínima para o painel
 
 
 def world_to_screen(x, y, min_x, max_y):
@@ -82,7 +86,7 @@ def draw_sensors(screen, font, sensors, min_x, max_y):
     for sensor in sensors:
         x, y = world_to_screen(sensor["x"], sensor["y"], min_x, max_y)
 
-        color = (0, 180, 255)
+        color = (255, 50, 50) if sensor.get("is_critical") else (0, 180, 255)
         radius = 6
 
         pygame.draw.circle(screen, color, (x, y), radius)
@@ -99,7 +103,8 @@ def draw_drones(screen, font, drones, drone_image, min_x, max_y):
             image_rect = drone_image.get_rect(center=(x, y))
             screen.blit(drone_image, image_rect)
         else:
-            pygame.draw.circle(screen, (100, 255, 100), (x, y), 12)
+            color = (255, 100, 100) if drone.get("is_busy") else (100, 255, 100)
+            pygame.draw.circle(screen, color, (x, y), 12)
 
         text = font.render(f"D{drone.get('id', '?')}", True, (255, 255, 255))
         screen.blit(text, (x + 14, y - 8))
@@ -109,11 +114,11 @@ def draw_grid(screen, font, min_x, max_x, min_y, max_y, width, height):
     start_x = int(min_x)
     end_x = int(max_x)
 
+    world_width = width - SIDEBAR_WIDTH
+
     for x in range(start_x, end_x + 1, 50):
         sx, _ = world_to_screen(x, min_y, min_x, max_y)
-
         pygame.draw.line(screen, (40, 40, 40), (sx, MARGIN), (sx, height - MARGIN), 1)
-
         text = font.render(str(x), True, (150, 150, 150))
         screen.blit(text, (sx - 10, height - MARGIN + 5))
 
@@ -122,11 +127,54 @@ def draw_grid(screen, font, min_x, max_x, min_y, max_y, width, height):
 
     for y in range(start_y, end_y + 1, 20):
         _, sy = world_to_screen(min_x, y, min_x, max_y)
-
-        pygame.draw.line(screen, (40, 40, 40), (MARGIN, sy), (width - MARGIN, sy), 1)
-
+        pygame.draw.line(screen, (40, 40, 40), (MARGIN, sy), (world_width - MARGIN, sy), 1)
         text = font.render(str(y), True, (150, 150, 150))
         screen.blit(text, (5, sy - 8))
+
+
+def draw_requests_panel(screen, font, requests, width, height):
+    panel_rect = pygame.Rect(width - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, height)
+    pygame.draw.rect(screen, (30, 30, 35), panel_rect)
+    pygame.draw.line(screen, (80, 80, 80), (width - SIDEBAR_WIDTH, 0), (width - SIDEBAR_WIDTH, height), 2)
+
+    title_font = pygame.font.SysFont("Arial", 20, bold=True)
+    title = title_font.render("Fila de Requisições", True, (255, 255, 255))
+    screen.blit(title, (width - SIDEBAR_WIDTH + 20, 20))
+
+    y_offset = 60
+    
+    if not requests:
+        empty_text = font.render("Nenhuma requisição ativa", True, (120, 120, 120))
+        screen.blit(empty_text, (width - SIDEBAR_WIDTH + 20, y_offset))
+        return
+
+    # Ordena requisições por clock (ou criticidade) para exibição consistente
+    requests_sorted = sorted(requests, key=lambda r: (-r.get('is_critical', 0), r.get('clock', 0)))
+
+    for req in requests_sorted:
+        sector_id = req.get("sector_id", "?")
+        req_id = req.get("origin_id", "?")
+        status = req.get("status", "UNKNOWN")
+        is_critical = req.get("is_critical", False)
+        
+        color = (200, 200, 200)
+        if status == "ATTENDING":
+            color = (100, 255, 100)
+        elif is_critical:
+            color = (255, 100, 100)
+            
+        text_str = f"[{sector_id}-{req_id}] {status}"
+        if is_critical:
+            text_str += " (!)"
+
+        text = font.render(text_str, True, color)
+        screen.blit(text, (width - SIDEBAR_WIDTH + 20, y_offset))
+        
+        y_offset += 25
+        if y_offset > height - 30: # Evita desenhar fora da tela se houver muitas requisições
+            text = font.render("...", True, (200, 200, 200))
+            screen.blit(text, (width - SIDEBAR_WIDTH + 20, y_offset))
+            break
 
 
 def main():
@@ -162,6 +210,7 @@ def main():
         sectors = world.get("sectors") or []
         sensors = world.get("sensors") or []
         drones = world.get("drones") or []
+        requests = world.get("requests") or []
 
         new_min_x, new_max_x, new_min_y, new_max_y = get_world_limits(sectors)
         new_width, new_height = get_screen_size(new_min_x, new_max_x, new_min_y, new_max_y)
@@ -183,6 +232,9 @@ def main():
         draw_sectors(screen, font, sectors, min_x, max_y)
         draw_sensors(screen, font, sensors, min_x, max_y)
         draw_drones(screen, font, drones, drone_image, min_x, max_y)
+        
+        # Desenha a aba/painel de requisições
+        draw_requests_panel(screen, font, requests, width, height)
 
         pygame.display.flip()
         clock.tick(30)

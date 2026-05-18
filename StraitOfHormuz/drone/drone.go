@@ -363,6 +363,9 @@ func markRequestAsAttending(request Request, attendingDrone Drone) {
 			break
 		}
 	}
+
+	request.Status = "ATTENDING"
+	go sendRequestToInterface("../data/initialization/interface.json", request)
 }
 
 func removeRequestDone(request Request, finishedDrone Drone) {
@@ -420,6 +423,9 @@ func removeRequestDone(request Request, finishedDrone Drone) {
 			r.Status,
 		)
 	}
+
+	request.Status = "DONE"
+	go sendRequestToInterface("../data/initialization/interface.json", request)
 }
 
 func dispatchRequests() {
@@ -767,6 +773,41 @@ func loadDrones(path string, myID int) error {
 }
 
 // == SAVE DATA
+
+func sendRequestToInterface(path string, request Request) {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("[INTERFACE REQUEST] Erro ao abrir interface.json:", err)
+		return
+	}
+	defer file.Close()
+
+	var config []struct {
+		Sectors  string `json:"sectors"`
+		Drones   string `json:"drones"`
+		Sensors  string `json:"sensors"`
+		Requests string `json:"requests"`
+	}
+
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Println("[INTERFACE REQUEST] Erro ao ler interface.json:", err)
+		return
+	}
+
+	conn, err := net.DialTimeout("tcp", config[0].Requests, 2*time.Second)
+	if err != nil {
+		fmt.Println("[INTERFACE REQUEST] Interface indisponível:", err)
+		return
+	}
+	defer conn.Close()
+
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		fmt.Println("[INTERFACE REQUEST] Erro ao enviar request:", err)
+		return
+	}
+
+	fmt.Println("[INTERFACE REQUEST] Request enviada/atualizada na interface")
+}
 
 func sendDroneToInterface(path string) {
 	mu.Lock()
