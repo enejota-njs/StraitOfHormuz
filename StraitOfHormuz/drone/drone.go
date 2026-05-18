@@ -747,7 +747,7 @@ func sendDroneToInterface(path string) {
 		conn, err := net.DialTimeout("tcp", config[0].Drones, 2*time.Second)
 		if err != nil {
 			fmt.Println("Erro ao conectar com a interface: ", err)
-			_ = conn.Close()
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
