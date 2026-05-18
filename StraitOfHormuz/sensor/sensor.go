@@ -194,23 +194,30 @@ func sendSensorToInterface(path string) {
 		Sensors string `json:"sensors"`
 	}
 
-	if err := json.NewDecoder(file).Decode(&config); err != nil {
+	if err = json.NewDecoder(file).Decode(&config); err != nil {
 		fmt.Println("Erro ao ler interface.json:", err)
 		return
 	}
 
-	conn, err := net.DialTimeout("tcp", config[0].Sensors, 2*time.Second)
-	if err != nil {
-		fmt.Println("Erro ao conectar interface:", err)
-		return
-	}
-	defer func() {
-		_ = conn.Close()
-	}()
+	for {
+		conn, err := net.DialTimeout("tcp", config[0].Sensors, 2*time.Second)
+		if err != nil {
+			fmt.Println("Erro ao conectar com a interface: ", err)
+			_ = conn.Close()
+			continue
+		}
 
-	if err := json.NewEncoder(conn).Encode(currentSensor); err != nil {
-		fmt.Println("Erro ao enviar sensor para interface:", err)
+		if err = json.NewEncoder(conn).Encode(currentSensor); err != nil {
+			fmt.Println("Erro ao enviar sensor para interface:", err)
+			_ = conn.Close()
+			continue
+		}
+
+		_ = conn.Close()
+		break
 	}
+
+	fmt.Println("Comunicação com a interface concluída")
 }
 
 // == MAIN

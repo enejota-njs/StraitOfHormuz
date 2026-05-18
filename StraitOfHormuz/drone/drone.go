@@ -62,23 +62,37 @@ var (
 
 func incrementClock() int {
 	clock++
+	fmt.Println("[CLOCK] Incrementado para:", clock)
+
 	return clock
 }
 
 func updateClock(receivedClock int) int {
+	fmt.Println("[CLOCK] Recebido:", receivedClock, "| Local antes:", clock)
+
 	if receivedClock > clock {
 		clock = receivedClock
 	}
 
 	incrementClock()
+
+	fmt.Println("[CLOCK] Local depois:", clock)
 	return clock
 }
 
-// == DRONE
+// == REQUEST
 
 func addRequestToQueue(request Request) {
+	fmt.Println("[QUEUE] Tentando adicionar requisição:")
+	fmt.Println("  SectorID:", request.SectorID)
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  Status:", request.Status)
+	fmt.Println("  Critical:", request.IsCritical)
+	fmt.Println("  Clock:", request.Clock)
+
 	for _, r := range requests {
 		if r.SectorID == request.SectorID && r.ID == request.ID {
+			fmt.Println("[QUEUE] Requisição já existe")
 			return
 		}
 	}
@@ -114,17 +128,42 @@ func addRequestToQueue(request Request) {
 	}
 
 	requests = append(requests[:index], append([]Request{request}, requests[index:]...)...)
+
+	fmt.Println("[QUEUE] Requisição adicionada na posição:", index)
+	fmt.Println("[QUEUE] Fila atual:")
+	for i, r := range requests {
+		fmt.Println(" ", i, "->",
+			"Sector:", r.SectorID,
+			"ID:", r.ID,
+			"Status:", r.Status,
+			"Critical:", r.IsCritical,
+			"Clock:", r.Clock,
+		)
+	}
 }
 
+// == DRONE
+
 func calculateDistance(d Drone, r Request) float64 {
-	return math.Sqrt(
+	distance := math.Sqrt(
 		math.Pow(d.X-r.X, 2) +
 			math.Pow(d.Y-r.Y, 2),
 	)
+
+	fmt.Println(
+		"[DISTANCE] Drone", d.ID,
+		"-> Request", r.ID,
+		"Distância:", distance,
+	)
+
+	return distance
 }
 
 func fulfillRequest(request Request) {
-	fmt.Println("Drone indo atender requisição: ", request.ID)
+	fmt.Println("\n[MISSION] Drone iniciou atendimento")
+	fmt.Println("  DroneID:", drone.ID)
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  Destino:", request.X, request.Y)
 
 	steps := 50
 	delay := 100 * time.Millisecond
@@ -140,6 +179,12 @@ func fulfillRequest(request Request) {
 
 		mu.Unlock()
 
+		fmt.Println(
+			"[MISSION] Drone movendo",
+			"| X:", drone.X,
+			"| Y:", drone.Y,
+		)
+
 		time.Sleep(delay)
 	}
 
@@ -148,11 +193,14 @@ func fulfillRequest(request Request) {
 	drone.Y = request.Y
 	mu.Unlock()
 
-	fmt.Println("Drone chegou ao local da requisição")
+	fmt.Println("\n[MISSION] Drone chegou")
+	fmt.Println("  X:", drone.X)
+	fmt.Println("  Y:", drone.Y)
 
+	fmt.Println("[MISSION] Simulando atendimento...")
 	time.Sleep(10 * time.Second)
 
-	fmt.Println("Drone finalizou requisição:", request.ID)
+	fmt.Println("[MISSION] Atendimento finalizado")
 }
 
 func warnDrones(text string, request Request) {
@@ -162,6 +210,11 @@ func warnDrones(text string, request Request) {
 	currentDrone := drone
 	mu.Unlock()
 
+	fmt.Println("\n[DRONE BROADCAST] Enviando mensagem para drones")
+	fmt.Println("  Tipo:", text)
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  Clock:", clockValue)
+
 	message := Message{
 		Text:    text,
 		Request: request,
@@ -170,6 +223,8 @@ func warnDrones(text string, request Request) {
 	}
 
 	for _, d := range currentDrones {
+		fmt.Println("[DRONE BROADCAST] Conectando no drone:", d.ID)
+
 		conn, err := net.DialTimeout("tcp", d.AddressForDrone, 2*time.Second)
 		if err != nil {
 			fmt.Println("Erro ao criar conexão com drone:", err)
@@ -185,6 +240,8 @@ func warnDrones(text string, request Request) {
 			continue
 		}
 
+		fmt.Println("[DRONE BROADCAST] Mensagem enviada para drone:", d.ID)
+
 		var response Message
 
 		if err = decoder.Decode(&response); err != nil {
@@ -192,6 +249,13 @@ func warnDrones(text string, request Request) {
 			_ = conn.Close()
 			continue
 		}
+
+		fmt.Println(
+			"[DRONE BROADCAST] Resposta recebida",
+			"| Drone:", d.ID,
+			"| Texto:", response.Text,
+			"| Clock:", response.Clock,
+		)
 
 		mu.Lock()
 		updateClock(response.Clock)
@@ -210,18 +274,28 @@ func warnDrones(text string, request Request) {
 }
 
 func markRequestAsAttending(request Request, attendingDrone Drone) {
+	fmt.Println("\n[ATTENDING] Atualizando requisição")
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  Drone responsável:", attendingDrone.ID)
+
 	mu.Lock()
 	defer mu.Unlock()
 
 	for i := range requests {
 		if requests[i].ID == request.ID && requests[i].SectorID == request.SectorID {
 			requests[i].Status = "ATTENDING"
+
+			fmt.Println(
+				"[ATTENDING] Status alterado para ATTENDING",
+				"| Request:", requests[i].ID,
+			)
 			break
 		}
 	}
 
 	if drone.ID == attendingDrone.ID {
 		drone.IsBusy = true
+		fmt.Println("[ATTENDING] Meu drone agora está ocupado")
 		return
 	}
 
@@ -230,12 +304,22 @@ func markRequestAsAttending(request Request, attendingDrone Drone) {
 			drones[i].IsBusy = true
 			drones[i].X = attendingDrone.X
 			drones[i].Y = attendingDrone.Y
+
+			fmt.Println(
+				"[ATTENDING] Drone remoto atualizado",
+				"| Drone:", drones[i].ID,
+				"| Busy:", drones[i].IsBusy,
+			)
 			break
 		}
 	}
 }
 
 func removeRequestDone(request Request, finishedDrone Drone) {
+	fmt.Println("\n[DONE] Finalizando requisição")
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  Drone:", finishedDrone.ID)
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -243,6 +327,7 @@ func removeRequestDone(request Request, finishedDrone Drone) {
 
 	for _, r := range requests {
 		if r.ID == request.ID && r.SectorID == request.SectorID {
+			fmt.Println("[DONE] Requisição removida da fila")
 			continue
 		}
 
@@ -255,6 +340,8 @@ func removeRequestDone(request Request, finishedDrone Drone) {
 		drone.IsBusy = false
 		drone.X = finishedDrone.X
 		drone.Y = finishedDrone.Y
+
+		fmt.Println("[DONE] Meu drone agora está livre")
 	}
 
 	for i := range drones {
@@ -262,8 +349,26 @@ func removeRequestDone(request Request, finishedDrone Drone) {
 			drones[i].IsBusy = false
 			drones[i].X = finishedDrone.X
 			drones[i].Y = finishedDrone.Y
+
+			fmt.Println(
+				"[DONE] Drone remoto atualizado",
+				"| Drone:", drones[i].ID,
+				"| Busy:", drones[i].IsBusy,
+			)
 			break
 		}
+	}
+
+	fmt.Println("[DONE] Fila restante:")
+	for _, r := range requests {
+		fmt.Println(
+			"  Request:",
+			r.ID,
+			"| Sector:",
+			r.SectorID,
+			"| Status:",
+			r.Status,
+		)
 	}
 }
 
@@ -277,11 +382,22 @@ func dispatchRequests() {
 
 		mu.Unlock()
 
+		fmt.Println("\n[DISPATCH] Verificando requisições")
+		fmt.Println("  Drone:", currentDrone.ID)
+		fmt.Println("  Busy:", currentDrone.IsBusy)
+		fmt.Println("  Requests:", len(currentRequests))
+
 		if currentDrone.IsOn && !currentDrone.IsBusy {
 			for _, r := range currentRequests {
 				if r.Status != "PENDING" {
 					continue
 				}
+
+				fmt.Println(
+					"[DISPATCH] Analisando requisição",
+					"| Request:", r.ID,
+					"| Sector:", r.SectorID,
+				)
 
 				closer := currentDrone
 				distance := calculateDistance(currentDrone, r)
@@ -303,7 +419,12 @@ func dispatchRequests() {
 					}
 				}
 
-				fmt.Println("Drone escolhido: ", closer.ID, " Requsição: ", r.ID, " Setor: ", r.SectorID)
+				fmt.Println(
+					"\n[DISPATCH] Drone escolhido",
+					"| Drone:", closer.ID,
+					"| Request:", r.ID,
+					"| Sector:", r.SectorID,
+				)
 
 				if closer.ID == currentDrone.ID {
 					markRequestAsAttending(r, currentDrone)
@@ -311,7 +432,9 @@ func dispatchRequests() {
 					warnDrones("ATTENDING", r)
 					warnSectors("ATTENDING", r)
 
+					fmt.Println("[DISPATCH] Iniciando missão")
 					fulfillRequest(r)
+					fmt.Println("[DISPATCH] Missão concluída")
 
 					mu.Lock()
 					updatedDrone := drone
@@ -343,7 +466,15 @@ func handleDrones(conn net.Conn) {
 		return
 	}
 
+	fmt.Println("\n[DRONE MSG] Mensagem recebida")
+	fmt.Println("  Text:", message.Text)
+	fmt.Println("  Drone origem:", message.Drone.ID)
+	fmt.Println("  RequestID:", message.Request.ID)
+	fmt.Println("  Clock:", message.Clock)
+
 	if message.Text == "ATTENDING" {
+		fmt.Println("[DRONE MSG] Processando ATTENDING")
+
 		mu.Lock()
 		currentClock := updateClock(message.Clock)
 		mu.Unlock()
@@ -357,6 +488,8 @@ func handleDrones(conn net.Conn) {
 	}
 
 	if message.Text == "DONE" {
+		fmt.Println("[DRONE MSG] Processando DONE")
+
 		mu.Lock()
 		currentClock := updateClock(message.Clock)
 		mu.Unlock()
@@ -389,6 +522,8 @@ func listenDrones() {
 			continue
 		}
 
+		fmt.Println("[SERVER] Nova conexão de drone aceita")
+
 		go handleDrones(conn)
 	}
 }
@@ -396,6 +531,10 @@ func listenDrones() {
 // == SECTOR
 
 func warnSectors(text string, request Request) {
+	fmt.Println("\n[SECTOR BROADCAST] Enviando atualização")
+	fmt.Println("  Tipo:", text)
+	fmt.Println("  Request:", request.ID)
+
 	mu.Lock()
 	clockValue := incrementClock()
 	currentDrone := drone
@@ -410,6 +549,8 @@ func warnSectors(text string, request Request) {
 	}
 
 	for _, s := range currentSectors {
+		fmt.Println("[SECTOR BROADCAST] Conectando setor:", s.ID)
+
 		conn, err := net.DialTimeout("tcp", s.AddressForDrone, 2*time.Second)
 		if err != nil {
 			fmt.Println("Erro ao conectar com setor: ", s.ID)
@@ -425,6 +566,8 @@ func warnSectors(text string, request Request) {
 			continue
 		}
 
+		fmt.Println("[SECTOR BROADCAST] Mensagem enviada")
+
 		var response Message
 
 		if err = decoder.Decode(&response); err != nil {
@@ -432,6 +575,12 @@ func warnSectors(text string, request Request) {
 			_ = conn.Close()
 			continue
 		}
+
+		fmt.Println(
+			"[SECTOR BROADCAST] Resposta",
+			"| Setor:", s.ID,
+			"| Texto:", response.Text,
+		)
 
 		mu.Lock()
 		updateClock(response.Clock)
@@ -464,8 +613,16 @@ func handleSector(conn net.Conn) {
 		return
 	}
 
+	fmt.Println("\n[SECTOR MSG] Mensagem recebida")
+	fmt.Println("  Text:", message.Text)
+	fmt.Println("  Request:", message.Request.ID)
+	fmt.Println("  Sector origem:", message.Request.SectorID)
+	fmt.Println("  Clock:", message.Clock)
+
 	switch message.Text {
 	case "REQUEST":
+		fmt.Println("[SECTOR MSG] Adicionando requisição na fila")
+
 		request := message.Request
 
 		mu.Lock()
@@ -500,6 +657,8 @@ func listenSectors() {
 			fmt.Println("Erro ao aceitar conexão (setor): ", err)
 			continue
 		}
+
+		fmt.Println("[SERVER] Nova conexão de setor aceita")
 
 		go handleSector(conn)
 	}
@@ -579,22 +738,27 @@ func sendDroneToInterface(path string) {
 		Sensors string `json:"sensors"`
 	}
 
-	if err := json.NewDecoder(file).Decode(&config); err != nil {
+	if err = json.NewDecoder(file).Decode(&config); err != nil {
 		fmt.Println("Erro ao ler interface.json:", err)
 		return
 	}
 
-	conn, err := net.DialTimeout("tcp", config[0].Drones, 2*time.Second)
-	if err != nil {
-		fmt.Println("Erro ao conectar interface:", err)
-		return
-	}
-	defer func() {
-		_ = conn.Close()
-	}()
+	for {
+		conn, err := net.DialTimeout("tcp", config[0].Drones, 2*time.Second)
+		if err != nil {
+			fmt.Println("Erro ao conectar com a interface: ", err)
+			_ = conn.Close()
+			continue
+		}
 
-	if err := json.NewEncoder(conn).Encode(currentDrone); err != nil {
-		fmt.Println("Erro ao enviar drone para interface:", err)
+		if err := json.NewEncoder(conn).Encode(currentDrone); err != nil {
+			fmt.Println("Erro ao enviar drone para interface:", err)
+			_ = conn.Close()
+			continue
+		}
+
+		_ = conn.Close()
+		break
 	}
 }
 
@@ -627,6 +791,16 @@ func main() {
 	if loadSectors(sectorsPath) != nil {
 		return
 	}
+
+	fmt.Println("\n[MAIN] Drone iniciado")
+	fmt.Println("  ID:", drone.ID)
+	fmt.Println("  X:", drone.X)
+	fmt.Println("  Y:", drone.Y)
+	fmt.Println("  Busy:", drone.IsBusy)
+	fmt.Println("  On:", drone.IsOn)
+
+	fmt.Println("[MAIN] Outros drones:", len(drones))
+	fmt.Println("[MAIN] Setores:", len(sectors))
 
 	go listenDrones()
 	go listenSectors()

@@ -1,29 +1,33 @@
 [
   {
+    "id": 1,
     "type": "RadarCosteiro",
-    "x": 20,
-    "y": 40,
+    "x": 10,
+    "y": 20,
     "is_active": false,
     "is_critical": false
   },
   {
+    "id": 2,
     "type": "RadarCosteiro",
-    "x": 100,
-    "y": 76,
+    "x": 66,
+    "y": 45,
     "is_active": false,
     "is_critical": false
   },
   {
+    "id": 3,
     "type": "RadarCosteiro",
-    "x": 159,
-    "y": 98,
+    "x": 112,
+    "y": 77,
     "is_active": false,
     "is_critical": false
   },
   {
+    "id": 4,
     "type": "RadarCosteiro",
-    "x": 250,
-    "y": 0,
+    "x": 199,
+    "y": 30,
     "is_active": false,
     "is_critical": false
   }

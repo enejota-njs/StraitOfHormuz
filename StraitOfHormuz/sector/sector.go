@@ -71,23 +71,36 @@ var (
 
 func incrementClock() int {
 	clock++
+	fmt.Println("[CLOCK] Incrementado para:", clock)
 	return clock
 }
 
 func updateClock(receivedClock int) int {
+	fmt.Println("[CLOCK] Recebido:", receivedClock, "| Local antes:", clock)
+
 	if receivedClock > clock {
 		clock = receivedClock
 	}
 
 	incrementClock()
+
+	fmt.Println("[CLOCK] Local depois:", clock)
 	return clock
 }
 
 // == REQUEST
 
 func addRequestToQueue(request Request) {
+	fmt.Println("[QUEUE] Tentando adicionar requisição:")
+	fmt.Println("  SectorID:", request.SectorID)
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  Status:", request.Status)
+	fmt.Println("  Critical:", request.IsCritical)
+	fmt.Println("  Clock:", request.Clock)
+
 	for _, r := range requests {
 		if r.SectorID == request.SectorID && r.ID == request.ID {
+			fmt.Println("[QUEUE] Requisição já existe, não adicionou")
 			return
 		}
 	}
@@ -123,6 +136,18 @@ func addRequestToQueue(request Request) {
 	}
 
 	requests = append(requests[:index], append([]Request{request}, requests[index:]...)...)
+
+	fmt.Println("[QUEUE] Requisição adicionada na posição:", index)
+	fmt.Println("[QUEUE] Fila atual:")
+	for i, r := range requests {
+		fmt.Println(" ", i, "->",
+			"Sector:", r.SectorID,
+			"ID:", r.ID,
+			"Status:", r.Status,
+			"Critical:", r.IsCritical,
+			"Clock:", r.Clock,
+		)
+	}
 }
 
 func sendRequest(sensor Sensor) {
@@ -140,6 +165,13 @@ func sendRequest(sensor Sensor) {
 		IsCritical: sensor.IsCritical,
 		Clock:      clockValue,
 	}
+
+	fmt.Println("\n[REQUEST] Nova requisição criada")
+	fmt.Println("  SectorID:", request.SectorID)
+	fmt.Println("  RequestID:", request.ID)
+	fmt.Println("  X:", request.X, "Y:", request.Y)
+	fmt.Println("  Critical:", request.IsCritical)
+	fmt.Println("  Clock:", request.Clock)
 
 	addRequestToQueue(request)
 
@@ -164,6 +196,8 @@ func sendRequest(sensor Sensor) {
 		encoder := json.NewEncoder(conn)
 		decoder := json.NewDecoder(conn)
 
+		fmt.Println("[REQUEST] Enviando requisição para setor ID:", s.ID, "Endereço:", s.AddressForSector)
+
 		if err = encoder.Encode(message); err != nil {
 			fmt.Println("Erro ao enviar mensagem para setor: ID ", s.ID)
 			_ = conn.Close()
@@ -178,12 +212,14 @@ func sendRequest(sensor Sensor) {
 			continue
 		}
 
+		fmt.Println("[REQUEST] Resposta do setor ID:", s.ID, "Texto:", response.Text, "Clock:", response.Clock)
+
 		mu.Lock()
 		updateClock(response.Clock)
 		mu.Unlock()
 
 		if response.Text == "QUEUED" {
-			fmt.Println("Listada")
+			fmt.Println("[REQUEST] Requisição confirmada e listada")
 			_ = conn.Close()
 		}
 	}
@@ -197,6 +233,8 @@ func sendRequest(sensor Sensor) {
 
 		encoder := json.NewEncoder(conn)
 		decoder := json.NewDecoder(conn)
+
+		fmt.Println("[REQUEST] Enviando requisição para drone ID:", d.ID, "Endereço:", d.AddressForSector)
 
 		if err = encoder.Encode(message); err != nil {
 			fmt.Println("Erro ao enviar mensagem para drone: ID ", d.ID)
@@ -212,6 +250,8 @@ func sendRequest(sensor Sensor) {
 			continue
 		}
 
+		fmt.Println("[REQUEST] Resposta do drone ID:", d.ID, "Texto:", response.Text, "Clock:", response.Clock)
+
 		mu.Lock()
 		updateClock(response.Clock)
 		mu.Unlock()
@@ -226,19 +266,31 @@ func sendRequest(sensor Sensor) {
 // == DRONE
 
 func markRequestAsAttending(request Request, attendingDrone Drone) {
+	fmt.Println("\n[ATTENDING] Drone aceitou requisição")
+	fmt.Println("  DroneID:", attendingDrone.ID)
+	fmt.Println("  SectorID:", request.SectorID)
+	fmt.Println("  RequestID:", request.ID)
+
 	for i := range requests {
 		if requests[i].SectorID == request.SectorID && requests[i].ID == request.ID {
+			fmt.Println("[ATTENDING] Status antes:", requests[i].Status)
 			requests[i].Status = "ATTENDING"
+			fmt.Println("[ATTENDING] Status depois:", requests[i].Status)
 			break
 		}
 	}
 }
 
 func removeRequestDone(request Request) {
+	fmt.Println("\n[DONE] Removendo requisição finalizada")
+	fmt.Println("  SectorID:", request.SectorID)
+	fmt.Println("  RequestID:", request.ID)
+
 	var filtered []Request
 
 	for _, r := range requests {
 		if r.SectorID == request.SectorID && r.ID == request.ID {
+			fmt.Println("[DONE] Requisição encontrada e removida")
 			continue
 		}
 
@@ -246,6 +298,11 @@ func removeRequestDone(request Request) {
 	}
 
 	requests = filtered
+
+	fmt.Println("[DONE] Fila após remoção:")
+	for i, r := range requests {
+		fmt.Println(" ", i, "-> Sector:", r.SectorID, "ID:", r.ID, "Status:", r.Status)
+	}
 }
 
 func handleDrone(conn net.Conn) {
@@ -260,8 +317,17 @@ func handleDrone(conn net.Conn) {
 		return
 	}
 
+	fmt.Println("\n[DRONE MSG] Mensagem recebida de drone")
+	fmt.Println("  Text:", message.Text)
+	fmt.Println("  Clock recebido:", message.Clock)
+	fmt.Println("  DroneID:", message.Drone.ID)
+	fmt.Println("  Request SectorID:", message.Request.SectorID)
+	fmt.Println("  Request ID:", message.Request.ID)
+
 	switch message.Text {
 	case "ATTENDING":
+		fmt.Println("[DRONE MSG] Processando ATTENDING")
+
 		mu.Lock()
 		currentClock := updateClock(message.Clock)
 		markRequestAsAttending(message.Request, message.Drone)
@@ -273,6 +339,8 @@ func handleDrone(conn net.Conn) {
 		})
 
 	case "DONE":
+		fmt.Println("[DRONE MSG] Processando DONE")
+
 		mu.Lock()
 		currentClock := updateClock(message.Clock)
 		removeRequestDone(message.Request)
@@ -323,7 +391,16 @@ func handleSensor(conn net.Conn) {
 			return
 		}
 
+		fmt.Println("\n[SENSOR] Sensor recebido")
+		fmt.Println("  ID:", sensor.ID)
+		fmt.Println("  Type:", sensor.Type)
+		fmt.Println("  X:", sensor.X, "Y:", sensor.Y)
+		fmt.Println("  Active:", sensor.IsActive)
+		fmt.Println("  Critical:", sensor.IsCritical)
+
 		if sensor.IsActive {
+			fmt.Println("[SENSOR] Sensor está ativo, criando requisição")
+
 			go sendRequest(sensor)
 		}
 	}
@@ -350,6 +427,8 @@ func listenSensor() {
 			continue
 		}
 
+		fmt.Println("Sensor conectado")
+
 		go handleSensor(conn)
 	}
 }
@@ -368,8 +447,16 @@ func handleSector(conn net.Conn) {
 		return
 	}
 
+	fmt.Println("\n[SECTOR MSG] Mensagem recebida de outro setor")
+	fmt.Println("  Text:", message.Text)
+	fmt.Println("  Clock recebido:", message.Clock)
+	fmt.Println("  Request SectorID:", message.Request.SectorID)
+	fmt.Println("  Request ID:", message.Request.ID)
+
 	switch message.Text {
 	case "REQUEST":
+		fmt.Println("[SECTOR MSG] Processando REQUEST e adicionando na fila")
+
 		mu.Lock()
 		currentClock := updateClock(message.Clock)
 		addRequestToQueue(message.Request)
@@ -459,6 +546,10 @@ func loadDrones(path string) error {
 // == SAVE DATA
 
 func sendSectorToInterface(path string) {
+	mu.Lock()
+	currentSector := sector
+	mu.Unlock()
+
 	file, err := os.Open(path)
 	if err != nil {
 		fmt.Println("Erro ao abrir interface.json:", err)
@@ -474,23 +565,34 @@ func sendSectorToInterface(path string) {
 		Sensors string `json:"sensors"`
 	}
 
-	if err := json.NewDecoder(file).Decode(&config); err != nil {
+	if err = json.NewDecoder(file).Decode(&config); err != nil {
 		fmt.Println("Erro ao ler interface.json:", err)
 		return
 	}
 
-	conn, err := net.DialTimeout("tcp", config[0].Sectors, 2*time.Second)
-	if err != nil {
-		fmt.Println("Erro ao conectar interface:", err)
-		return
-	}
-	defer func() {
-		_ = conn.Close()
-	}()
+	fmt.Println("\n[INTERFACE] Enviando setor para interface")
+	fmt.Println("  SectorID:", currentSector.ID)
+	fmt.Println("  Endereço interface setores:", config[0].Sectors)
 
-	if err := json.NewEncoder(conn).Encode(sector); err != nil {
-		fmt.Println("Erro ao enviar setor para interface:", err)
+	for {
+		conn, err := net.DialTimeout("tcp", config[0].Sectors, 2*time.Second)
+		if err != nil {
+			fmt.Println("Erro ao conectar com a interface: ", err)
+			_ = conn.Close()
+			continue
+		}
+
+		if err = json.NewEncoder(conn).Encode(currentSector); err != nil {
+			fmt.Println("Erro ao enviar setor para interface:", err)
+			_ = conn.Close()
+			continue
+		}
+
+		_ = conn.Close()
+		break
 	}
+
+	fmt.Println("[INTERFACE] Setor enviado com sucesso")
 }
 
 // == MAIN
@@ -516,7 +618,23 @@ func main() {
 		return
 	}
 
-	sendSectorToInterface(intefacePath)
+	fmt.Println("\n[MAIN] Setor iniciado")
+	fmt.Println("  ID:", sector.ID)
+	fmt.Println("  AddressForSensor:", sector.AddressForSensor)
+	fmt.Println("  AddressForSector:", sector.AddressForSector)
+	fmt.Println("  AddressForDrone:", sector.AddressForDrone)
+
+	fmt.Println("[MAIN] Outros setores carregados:", len(sectors))
+	for _, s := range sectors {
+		fmt.Println("  Setor ID:", s.ID, "|", s.AddressForSector)
+	}
+
+	fmt.Println("[MAIN] Drones carregados:", len(drones))
+	for _, d := range drones {
+		fmt.Println("  Drone ID:", d.ID, "|", d.AddressForSector)
+	}
+
+	go sendSectorToInterface(intefacePath)
 
 	go listenSensor()
 	go listenSectors()

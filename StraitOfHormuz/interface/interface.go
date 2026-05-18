@@ -256,10 +256,57 @@ func listenSensors(port string, path string) {
 	}
 }
 
+func loadInterfacePorts(path string) (string, string, string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", "", "", err
+	}
+	defer file.Close()
+
+	var config []struct {
+		Sectors string `json:"sectors"`
+		Drones  string `json:"drones"`
+		Sensors string `json:"sensors"`
+	}
+
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		return "", "", "", err
+	}
+
+	return config[0].Sectors, config[0].Drones, config[0].Sensors, nil
+}
+
+func clearFile(path string) {
+	file, err := os.Create(path)
+	if err != nil {
+		fmt.Println("Erro ao limpar arquivo:", path, err)
+		return
+	}
+	defer file.Close()
+
+	_, _ = file.WriteString("[]")
+}
+
 func main() {
-	go listenDrones("9100", "../data/interface/drones.json")
-	go listenSectors("9200", "../data/interface/sectors.json")
-	go listenSensors("9300", "../data/interface/sensors.json")
+	clearFile("../data/interface/drones.json")
+	clearFile("../data/interface/sectors.json")
+	clearFile("../data/interface/sensors.json")
+
+	interfacePath := "../data/initialization/interface.json"
+
+	sectorsPort, dronesPort, sensorsPort, err := loadInterfacePorts(interfacePath)
+	if err != nil {
+		fmt.Println("Erro ao ler interface.json:", err)
+		return
+	}
+
+	_, sectorsPort, _ = net.SplitHostPort(sectorsPort)
+	_, dronesPort, _ = net.SplitHostPort(dronesPort)
+	_, sensorsPort, _ = net.SplitHostPort(sensorsPort)
+
+	go listenDrones(dronesPort, "../data/interface/drones.json")
+	go listenSectors(sectorsPort, "../data/interface/sectors.json")
+	go listenSensors(sensorsPort, "../data/interface/sensors.json")
 
 	select {}
 }
