@@ -32,10 +32,11 @@ type Drone struct {
 }
 
 type Message struct {
-	Text    string  `json:"text"`
-	Request Request `json:"request"`
-	Clock   int     `json:"clock"`
-	Drone   Drone   `json:"drone"`
+	Text     string    `json:"text"`
+	Requests []Request `json:"requests"`
+	Request  Request   `json:"request"`
+	Clock    int       `json:"clock"`
+	Drone    Drone     `json:"drone"`
 }
 
 type Sector struct {
@@ -139,6 +140,55 @@ func addRequestToQueue(request Request) {
 			"Critical:", r.IsCritical,
 			"Clock:", r.Clock,
 		)
+	}
+}
+
+func syncRequestsFromSectors() {
+	mu.Lock()
+	clockValue := incrementClock()
+	currentSectors := append([]Sector(nil), sectors...)
+	mu.Unlock()
+
+	message := Message{
+		Text:  "SYNC_REQUESTS",
+		Clock: clockValue,
+	}
+
+	for _, s := range currentSectors {
+		conn, err := net.DialTimeout("tcp", s.AddressForDrone, 2*time.Second)
+		if err != nil {
+			fmt.Println("[SYNC] Setor indisponível:", s.ID)
+			continue
+		}
+
+		encoder := json.NewEncoder(conn)
+		decoder := json.NewDecoder(conn)
+
+		if err := encoder.Encode(message); err != nil {
+			fmt.Println("[SYNC] Erro ao pedir fila ao setor:", s.ID)
+			_ = conn.Close()
+			continue
+		}
+
+		var response Message
+		if err := decoder.Decode(&response); err != nil {
+			fmt.Println("[SYNC] Erro ao receber fila do setor:", s.ID)
+			_ = conn.Close()
+			continue
+		}
+
+		mu.Lock()
+		updateClock(response.Clock)
+
+		for _, r := range response.Requests {
+			addRequestToQueue(r)
+		}
+
+		mu.Unlock()
+
+		fmt.Println("[SYNC] Fila sincronizada com setor:", s.ID)
+
+		_ = conn.Close()
 	}
 }
 
@@ -804,6 +854,8 @@ func main() {
 
 	go listenDrones()
 	go listenSectors()
+
+	syncRequestsFromSectors()
 
 	go dispatchRequests()
 

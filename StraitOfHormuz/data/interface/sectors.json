@@ -28,5 +28,15 @@
     "right": 150,
     "top": 100,
     "bottom": 0
+  },
+  {
+    "id": 4,
+    "address_for_drone": "localhost:5009",
+    "address_for_sector": "localhost:5010",
+    "address_for_sensor": "localhost:5011",
+    "left": 151,
+    "right": 200,
+    "top": 100,
+    "bottom": 0
   }
 ]

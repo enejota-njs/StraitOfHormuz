@@ -41,10 +41,11 @@ type Sector struct {
 }
 
 type Message struct {
-	Text    string  `json:"text"`
-	Request Request `json:"request"`
-	Clock   int     `json:"clock"`
-	Drone   Drone   `json:"drone"`
+	Text     string    `json:"text"`
+	Requests []Request `json:"requests"`
+	Request  Request   `json:"request"`
+	Clock    int       `json:"clock"`
+	Drone    Drone     `json:"drone"`
 }
 
 type Drone struct {
@@ -349,6 +350,20 @@ func handleDrone(conn net.Conn) {
 		_ = encoder.Encode(Message{
 			Text:  "REMOVED",
 			Clock: currentClock,
+		})
+
+	case "SYNC_REQUESTS":
+		mu.Lock()
+		currentClock := updateClock(message.Clock)
+		currentRequests := append([]Request(nil), requests...)
+		mu.Unlock()
+
+		fmt.Println("[SYNC] Drone pediu fila atual de requisições")
+
+		_ = encoder.Encode(Message{
+			Text:     "REQUESTS_SYNCED",
+			Requests: currentRequests,
+			Clock:    currentClock,
 		})
 	}
 }
