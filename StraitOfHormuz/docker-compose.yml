@@ -8,6 +8,10 @@ services:
     command: ["./sector_bin", "1"]
     volumes:
       - ./data:/app/data
+    ports:
+      - "5016:5016"
+      - "5001:5001"
+      - "5002:5002"
 
   sector2:
     build:
@@ -16,6 +20,10 @@ services:
     command: ["./sector_bin", "2"]
     volumes:
       - ./data:/app/data
+    ports:
+      - "5003:5003"
+      - "5004:5004"
+      - "5005:5005"
 
   sector3:
     build:
@@ -24,6 +32,10 @@ services:
     command: ["./sector_bin", "3"]
     volumes:
       - ./data:/app/data
+    ports:
+      - "5006:5006"
+      - "5007:5007"
+      - "5008:5008"
 
   sector4:
     build:
@@ -32,6 +44,10 @@ services:
     command: ["./sector_bin", "4"]
     volumes:
       - ./data:/app/data
+    ports:
+      - "5009:5009"
+      - "5010:5010"
+      - "5011:5011"
 
   drone1:
     build:
@@ -40,6 +56,9 @@ services:
     command: ["./drone_bin", "1"]
     volumes:
       - ./data:/app/data
+    ports:
+      - "5012:5012"
+      - "5013:5013"
 
   drone2:
     build:
@@ -48,7 +67,10 @@ services:
     command: ["./drone_bin", "2"]
     volumes:
       - ./data:/app/data
-
+    ports:
+      - "5014:5014"
+      - "5015:5015"
+      
   sensor1:
     build:
       context: .
@@ -72,7 +94,7 @@ services:
     command: ["./sensor_bin", "3"]
     volumes:
       - ./data:/app/data
-  
+    
   sensor4:
     build:
       context: .
@@ -88,7 +110,12 @@ services:
     command: ["./interface_bin"]
     volumes:
       - ./data:/app/data
-
+    ports:
+      - "9001:9001"
+      - "9002:9002"
+      - "9003:9003"
+      - "9004:9004"
+      
   interface-gui:
     build:
       context: .
@@ -100,3 +127,4 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ./data:/app/data
+      - ./data/images:/app/data/images

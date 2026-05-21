@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "sector_id": 2,
+    "origin_id": 2,
+    "status": "PENDING",
+    "x": 66,
+    "y": 45,
+    "is_critical": false,
+    "clock": 39,
+    "attending_drone_id": 0
+  },
+  {
+    "sector_id": 1,
+    "origin_id": 4,
+    "status": "PENDING",
+    "x": 10,
+    "y": 20,
+    "is_critical": false,
+    "clock": 75,
+    "attending_drone_id": 0
+  },
+  {
+    "sector_id": 1,
+    "origin_id": 5,
+    "status": "PENDING",
+    "x": 10,
+    "y": 20,
+    "is_critical": false,
+    "clock": 116,
+    "attending_drone_id": 0
+  },
+  {
+    "sector_id": 3,
+    "origin_id": 4,
+    "status": "ATTENDING",
+    "x": 112,
+    "y": 77,
+    "is_critical": true,
+    "clock": 146,
+    "attending_drone_id": 0
+  }
+]

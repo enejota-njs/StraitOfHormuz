@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "id": 1,
+    "address_for_sector": "172.16.103.14:5012",
+    "address_for_drone": "172.16.103.14:5013",
+    "x": 112,
+    "y": 77,
+    "is_busy": true,
+    "is_on": true
+  }
+]

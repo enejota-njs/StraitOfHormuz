@@ -646,6 +646,7 @@ func main() {
 
 	id, err := strconv.Atoi(os.Args[1])
 	if err != nil {
+		fmt.Println("Erro no Atoi")
 		return
 	}
 
@@ -653,10 +654,12 @@ func main() {
 	dronesPath := "data/initialization/drones.json"
 	intefacePath := "data/initialization/interface.json"
 
-	if loadSectors(sectorsPath, id) != nil {
+	if err := loadSectors(sectorsPath, id); err != nil {
+		fmt.Println("ERRO AO CARREGAR SECTORS:", err)
 		return
 	}
-	if loadDrones(dronesPath) != nil {
+	if err := loadDrones(dronesPath); err != nil {
+		fmt.Println("ERRO AO CARREGAR DRONES:", err)
 		return
 	}
 
