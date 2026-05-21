@@ -1,0 +1,18 @@
+FROM golang:1.26-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY ./sector.go ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o sector_bin sector.go
+
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY --from=builder /app/sector_bin .
+COPY ./data/initialization/sectors.json ./data/initialization/sectors.json
+
+CMD ["./sector_bin"]
