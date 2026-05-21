@@ -43,8 +43,9 @@ services:
       dockerfile: ./interface/Dockerfile.py
     container_name: interface-gui-soh
     command: ["python3", "interface.py"]
+    environment:
       - DISPLAY=${DISPLAY}
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
     volumes:
-      - /tmp/ .X11-unix: /tmp/ .X11-unix
+      - /tmp/.X11-unix:/tmp/.X11-unix
       - ./data:/app/data
