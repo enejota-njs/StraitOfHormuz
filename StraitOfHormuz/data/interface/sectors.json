@@ -1,12 +1,1 @@
-[
-  {
-    "id": 1,
-    "address_for_drone": "sector-soh:5000",
-    "address_for_sector": "sector-soh:5001",
-    "address_for_sensor": "sector-soh:5002",
-    "left": 1,
-    "right": 50,
-    "top": 100,
-    "bottom": 0
-  }
-]
+[]

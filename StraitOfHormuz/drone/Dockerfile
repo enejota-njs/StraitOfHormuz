@@ -13,6 +13,6 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/drone_bin .
-COPY ./data/initialization/drones.json ./data/initialization/drones.json
+COPY ./data/initialization ./data/initialization 
 
 CMD ["./drone_bin"]
