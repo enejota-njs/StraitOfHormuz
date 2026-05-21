@@ -205,7 +205,15 @@ func handleDroneCrash(crashedDroneID int) {
 			requests[i].Status = "PENDING"
 			requests[i].AttendingDroneID = 0
 
-			go sendRequestToInterface("../data/initialization/interface.json", requests[i])
+			pendingRequest := requests[i]
+
+			go sendRequestToInterface(
+				"../data/initialization/interface.json",
+				pendingRequest,
+			)
+
+			go warnDrones("PENDING", pendingRequest)
+			go warnSectors("PENDING", pendingRequest)
 		}
 	}
 }
@@ -309,6 +317,24 @@ func warnDrones(text string, request Request) {
 
 		_ = conn.Close()
 	}
+}
+
+func markRequestAsPending(request Request) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i := range requests {
+		if requests[i].ID == request.ID && requests[i].SectorID == request.SectorID {
+			requests[i].Status = "PENDING"
+			requests[i].AttendingDroneID = 0
+			break
+		}
+	}
+
+	request.Status = "PENDING"
+	request.AttendingDroneID = 0
+
+	go sendRequestToInterface("../data/initialization/interface.json", request)
 }
 
 func markRequestAsAttending(request Request, attendingDrone Drone) {
@@ -485,6 +511,21 @@ func handleDrones(conn net.Conn) {
 
 		_ = encoder.Encode(Message{
 			Text:  "REMOVED",
+			Clock: currentClock,
+		})
+	}
+
+	if message.Text == "PENDING" {
+		fmt.Printf("\nAviso de PENDING recebido -> SectorID: %d | RequestID: %d\n", message.Request.SectorID, message.Request.ID)
+
+		mu.Lock()
+		currentClock := updateClock(message.Clock)
+		mu.Unlock()
+
+		markRequestAsPending(message.Request)
+
+		_ = encoder.Encode(Message{
+			Text:  "UPDATED",
 			Clock: currentClock,
 		})
 	}

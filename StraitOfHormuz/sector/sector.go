@@ -237,6 +237,59 @@ func sendRequest(sensor Sensor) {
 
 // == DRONE
 
+func handleDroneCrash(crashedDroneID int) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i := range drones {
+		if drones[i].ID == crashedDroneID {
+			drones[i].IsOn = false
+			drones[i].IsBusy = false
+			break
+		}
+	}
+
+	for i := range requests {
+		if requests[i].Status == "ATTENDING" &&
+			requests[i].AttendingDroneID == crashedDroneID {
+
+			requests[i].Status = "PENDING"
+			requests[i].AttendingDroneID = 0
+
+			pendingRequest := requests[i]
+
+			go sendRequestToInterface(
+				"../data/initialization/interface.json",
+				pendingRequest,
+			)
+		}
+	}
+}
+
+func monitorDrones() {
+	for {
+		mu.Lock()
+		currentDrones := append([]Drone(nil), drones...)
+		mu.Unlock()
+
+		for _, d := range currentDrones {
+			if !d.IsOn {
+				continue
+			}
+
+			conn, err := net.DialTimeout("tcp", d.AddressForDrone, 2*time.Second)
+			if err != nil {
+				fmt.Println("Drone não respondeu:", d.ID)
+				handleDroneCrash(d.ID)
+			} else {
+				_ = conn.Close()
+			}
+		}
+
+		time.Sleep(3 * time.Second)
+	}
+}
+
 func markRequestAsAttending(request Request, attendingDrone Drone) {
 	fmt.Printf("\nDrone aceitou requisição -> DroneID: %d | SectorID: %d | RequestID: %d\n", attendingDrone.ID, request.SectorID, request.ID)
 
@@ -310,6 +363,29 @@ func handleDrone(conn net.Conn) {
 			Text:     "REQUESTS_SYNCED",
 			Requests: currentRequests,
 			Clock:    currentClock,
+		})
+
+	case "PENDING":
+		mu.Lock()
+
+		currentClock := updateClock(message.Clock)
+
+		for i := range requests {
+			if requests[i].SectorID == message.Request.SectorID &&
+				requests[i].ID == message.Request.ID {
+
+				requests[i].Status = "PENDING"
+				requests[i].AttendingDroneID = 0
+
+				break
+			}
+		}
+
+		mu.Unlock()
+
+		_ = encoder.Encode(Message{
+			Text:  "UPDATED",
+			Clock: currentClock,
 		})
 	}
 }
@@ -589,6 +665,7 @@ func main() {
 	go listenSensor()
 	go listenSectors()
 	go listenDrone()
+	go monitorDrones()
 
 	select {}
 }
