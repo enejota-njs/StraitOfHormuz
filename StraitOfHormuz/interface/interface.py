@@ -52,7 +52,7 @@ def get_world_limits(sectors):
 def get_screen_size(min_x, max_x, min_y, max_y):
     world_width = int((max_x - min_x) * SCALE + 2 * MARGIN)
     height = int((max_y - min_y) * SCALE + 2 * MARGIN)
-    
+
     total_width = world_width + SIDEBAR_WIDTH
     return total_width, max(height, 400) # Garante uma altura mínima para o painel
 
@@ -86,7 +86,7 @@ def draw_sensors(screen, font, sensors, min_x, max_y):
     for sensor in sensors:
         x, y = world_to_screen(sensor["x"], sensor["y"], min_x, max_y)
 
-        color = (255, 50, 50) if sensor.get("is_critical") else (0, 180, 255)
+        color = (0, 180, 255)
         radius = 6
 
         pygame.draw.circle(screen, color, (x, y), radius)
@@ -142,13 +142,12 @@ def draw_requests_panel(screen, font, requests, width, height):
     screen.blit(title, (width - SIDEBAR_WIDTH + 20, 20))
 
     y_offset = 60
-    
+
     if not requests:
         empty_text = font.render("Nenhuma requisição ativa", True, (120, 120, 120))
         screen.blit(empty_text, (width - SIDEBAR_WIDTH + 20, y_offset))
         return
 
-    # Ordena requisições por clock (ou criticidade) para exibição consistente
     requests_sorted = sorted(requests, key=lambda r: (-r.get('is_critical', 0), r.get('clock', 0)))
 
     for req in requests_sorted:
@@ -156,22 +155,28 @@ def draw_requests_panel(screen, font, requests, width, height):
         req_id = req.get("origin_id", "?")
         status = req.get("status", "UNKNOWN")
         is_critical = req.get("is_critical", False)
-        
+
         color = (200, 200, 200)
         if status == "ATTENDING":
             color = (100, 255, 100)
         elif is_critical:
             color = (255, 100, 100)
-            
-        text_str = f"[{sector_id}-{req_id}] {status}"
-        if is_critical:
-            text_str += " (!)"
+
+        status_pt = {
+            "ATTENDING": "ATENDENDO",
+            "PENDING": "PENDENTE",
+            "COMPLETED": "CONCLUÍDO",
+            "FAILED": "FALHOU",
+            "UNKNOWN": "DESCONHECIDO"
+        }.get(status, status)
+
+        text_str = f"[ {sector_id} - {req_id} ]  {status_pt}"
 
         text = font.render(text_str, True, color)
         screen.blit(text, (width - SIDEBAR_WIDTH + 20, y_offset))
-        
+
         y_offset += 25
-        if y_offset > height - 30: # Evita desenhar fora da tela se houver muitas requisições
+        if y_offset > height - 30:
             text = font.render("...", True, (200, 200, 200))
             screen.blit(text, (width - SIDEBAR_WIDTH + 20, y_offset))
             break
@@ -232,8 +237,6 @@ def main():
         draw_sectors(screen, font, sectors, min_x, max_y)
         draw_sensors(screen, font, sensors, min_x, max_y)
         draw_drones(screen, font, drones, drone_image, min_x, max_y)
-        
-        # Desenha a aba/painel de requisições
         draw_requests_panel(screen, font, requests, width, height)
 
         pygame.display.flip()

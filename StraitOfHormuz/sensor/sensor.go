@@ -42,7 +42,7 @@ var (
 func runSensor() {
 	conn, err := net.DialTimeout("tcp", sector, 2*time.Second)
 	if err != nil {
-		fmt.Println("Erro ao conectar com setor: ", err)
+		fmt.Println("Erro ao se comunicar com servidor do setor: ", err)
 		return
 	}
 
@@ -52,27 +52,25 @@ func runSensor() {
 		r := rand.Float64()
 
 		mu.Lock()
-		sensor.IsActive = r > 0.5
-		sensor.IsCritical = r > 0.7
+		sensor.IsActive = r > 0.6
+		sensor.IsCritical = r > 0.8
 		currentSensor := sensor
 		mu.Unlock()
 
-		fmt.Println("[SENSOR] Enviando leitura para setor:", sector)
-		fmt.Println("[SENSOR] Dados:", currentSensor)
+		fmt.Printf("\nSensor enviando -> ID: %d | Type: %s | X: %.2f | Y: %.2f | Active: %t | Critical: %t\n", currentSensor.ID, currentSensor.Type, currentSensor.X, currentSensor.Y, currentSensor.IsActive, currentSensor.IsCritical)
 
 		if err := encoder.Encode(currentSensor); err != nil {
-			fmt.Println("Erro ao se comunicar com setor: ", err)
 			_ = conn.Close()
 
 			for {
 				conn, err = net.DialTimeout("tcp", sector, 2*time.Second)
 				if err == nil {
-					fmt.Println("Reconectado ao setor: ", sector)
-					encoder = json.NewEncoder(conn)
+					fmt.Println("Erro ao se comunicar com servidor do setor: ", err)
+
 					break
 				}
 
-				fmt.Println("Tentando reconectar...")
+				fmt.Println("Tentando reconectar")
 				time.Sleep(2 * time.Second)
 			}
 		}
@@ -86,7 +84,7 @@ func runSensor() {
 func findSector(path string) bool {
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Println("Erro ao abrir sectors.json: ", err)
+		fmt.Println("Erro ao abrir arquivo dos setores: ", err)
 		return false
 	}
 	defer func() {
@@ -95,51 +93,37 @@ func findSector(path string) bool {
 
 	var config []Sector
 	if err := json.NewDecoder(file).Decode(&config); err != nil {
-		fmt.Println("Erro ao ler sectors.json: ", err)
 		return false
 	}
 
 	x := sensor.X
 	y := sensor.Y
-	var valid = false
 
 	for _, s := range config {
 		if x >= s.Left &&
 			x <= s.Right &&
 			y <= s.Top &&
 			y >= s.Bottom {
-			valid = true
 			sector = s.AddressForSensor
-
-			fmt.Println("[SENSOR] Sensor localizado em X:", x, "Y:", y)
-			fmt.Println("[SENSOR] Setor escolhido:", sector)
+			return true
 		}
 	}
 
-	if !valid {
-		fmt.Println("Nenhum setor encontrado")
-	}
-
-	return valid
+	return false
 }
 
 // == REGISTER
 
 func register(path string) bool {
-	if len(os.Args) < 2 {
-		fmt.Println("Informe o ID do sensor")
-		return false
-	}
-
 	id, err := strconv.Atoi(os.Args[1])
+
 	if err != nil {
-		fmt.Println("ID inválido")
 		return false
 	}
 
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Println("Erro ao abrir sensors.json:", err)
+		fmt.Println("Erro ao abrir arquivo dos sensores: ", err)
 		return false
 	}
 	defer func() {
@@ -148,7 +132,6 @@ func register(path string) bool {
 
 	var config []Sensor
 	if err := json.NewDecoder(file).Decode(&config); err != nil {
-		fmt.Println("Erro ao ler sensors.json:", err)
 		return false
 	}
 
@@ -163,12 +146,10 @@ func register(path string) bool {
 				IsCritical: false,
 			}
 
-			fmt.Println("[SENSOR] Sensor carregado:", sensor)
 			return true
 		}
 	}
 
-	fmt.Println("Sensor não encontrado com ID:", id)
 	return false
 }
 
@@ -181,7 +162,7 @@ func sendSensorToInterface(path string) {
 
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Println("Erro ao abrir interface.json:", err)
+		fmt.Println("Erro ao abrir arquivo da interface: ", err)
 		return
 	}
 	defer func() {
@@ -195,20 +176,18 @@ func sendSensorToInterface(path string) {
 	}
 
 	if err = json.NewDecoder(file).Decode(&config); err != nil {
-		fmt.Println("Erro ao ler interface.json:", err)
 		return
 	}
 
 	for {
 		conn, err := net.DialTimeout("tcp", config[0].Sensors, 2*time.Second)
 		if err != nil {
-			fmt.Println("Erro ao conectar com a interface: ", err)
+			fmt.Println("Erro ao se comunicar com servidor da interface: ", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		if err = json.NewEncoder(conn).Encode(currentSensor); err != nil {
-			fmt.Println("Erro ao enviar sensor para interface:", err)
 			_ = conn.Close()
 			continue
 		}
@@ -216,8 +195,6 @@ func sendSensorToInterface(path string) {
 		_ = conn.Close()
 		break
 	}
-
-	fmt.Println("Comunicação com a interface concluída")
 }
 
 // == MAIN
@@ -232,13 +209,15 @@ func main() {
 	intefacePath := "../data/initialization/interface.json"
 
 	if !register(sensorsPath) {
+		fmt.Println("Erro ao registrar sensor")
 		return
 	}
 	if !findSector(sectorsPath) {
+		fmt.Println("Erro ao procurar setor")
 		return
 	}
 
-	sendSensorToInterface(intefacePath)
+	go sendSensorToInterface(intefacePath)
 
 	go runSensor()
 

@@ -9,13 +9,14 @@ import (
 )
 
 type Request struct {
-	SectorID   int     `json:"sector_id"`
-	ID         int     `json:"origin_id"`
-	Status     string  `json:"status"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
-	IsCritical bool    `json:"is_critical"`
-	Clock      int     `json:"clock"`
+	SectorID         int     `json:"sector_id"`
+	ID               int     `json:"origin_id"`
+	Status           string  `json:"status"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
+	IsCritical       bool    `json:"is_critical"`
+	Clock            int     `json:"clock"`
+	AttendingDroneID int     `json:"attending_drone_id"`
 }
 
 type Drone struct {
@@ -55,34 +56,42 @@ func saveDrone(path string, drone Drone) error {
 
 	file, err := os.Open(path)
 	if err == nil {
-		_ = json.NewDecoder(file).Decode(&list)
-		_ = file.Close()
+		if stat, _ := file.Stat(); stat.Size() > 0 {
+			if err := json.NewDecoder(file).Decode(&list); err != nil {
+				file.Close()
+				return fmt.Errorf("arquivo ocupado")
+			}
+		}
+		file.Close()
 	}
 
+	var filtered []Drone
 	exists := false
 
-	for i := range list {
-		if list[i].ID == drone.ID {
-			list[i] = drone
+	for _, d := range list {
+		if d.ID == drone.ID {
 			exists = true
-			break
+			if drone.IsOn {
+				filtered = append(filtered, drone)
+			}
+		} else {
+			filtered = append(filtered, d)
 		}
 	}
 
-	if !exists {
-		list = append(list, drone)
+	if !exists && drone.IsOn {
+		filtered = append(filtered, drone)
 	}
 
-	output, err := os.Create(path)
+	outFile, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	defer outFile.Close()
 
-	encoder := json.NewEncoder(output)
+	encoder := json.NewEncoder(outFile)
 	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(list)
+	return encoder.Encode(filtered)
 }
 
 func saveSector(path string, sector Sector) error {
@@ -90,12 +99,16 @@ func saveSector(path string, sector Sector) error {
 
 	file, err := os.Open(path)
 	if err == nil {
-		_ = json.NewDecoder(file).Decode(&list)
-		_ = file.Close()
+		if stat, _ := file.Stat(); stat.Size() > 0 {
+			if err := json.NewDecoder(file).Decode(&list); err != nil {
+				file.Close()
+				return fmt.Errorf("arquivo ocupado")
+			}
+		}
+		file.Close()
 	}
 
 	exists := false
-
 	for i := range list {
 		if list[i].ID == sector.ID {
 			list[i] = sector
@@ -108,15 +121,14 @@ func saveSector(path string, sector Sector) error {
 		list = append(list, sector)
 	}
 
-	output, err := os.Create(path)
+	outFile, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	defer outFile.Close()
 
-	encoder := json.NewEncoder(output)
+	encoder := json.NewEncoder(outFile)
 	encoder.SetIndent("", "  ")
-
 	return encoder.Encode(list)
 }
 
@@ -125,12 +137,16 @@ func saveSensor(path string, sensor Sensor) error {
 
 	file, err := os.Open(path)
 	if err == nil {
-		_ = json.NewDecoder(file).Decode(&list)
-		_ = file.Close()
+		if stat, _ := file.Stat(); stat.Size() > 0 {
+			if err := json.NewDecoder(file).Decode(&list); err != nil {
+				file.Close()
+				return fmt.Errorf("arquivo ocupado")
+			}
+		}
+		file.Close()
 	}
 
 	exists := false
-
 	for i := range list {
 		if list[i].Type == sensor.Type && list[i].X == sensor.X && list[i].Y == sensor.Y {
 			list[i] = sensor
@@ -143,27 +159,71 @@ func saveSensor(path string, sensor Sensor) error {
 		list = append(list, sensor)
 	}
 
-	output, err := os.Create(path)
+	outFile, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	defer outFile.Close()
 
-	encoder := json.NewEncoder(output)
+	encoder := json.NewEncoder(outFile)
 	encoder.SetIndent("", "  ")
-
 	return encoder.Encode(list)
+}
+
+func saveRequest(path string, request Request) error {
+	var list []Request
+
+	file, err := os.Open(path)
+	if err == nil {
+		if stat, _ := file.Stat(); stat.Size() > 0 {
+			if err := json.NewDecoder(file).Decode(&list); err != nil {
+				file.Close()
+				return fmt.Errorf("arquivo ocupado")
+			}
+		}
+		file.Close()
+	}
+
+	var filtered []Request
+	exists := false
+
+	for _, r := range list {
+		if r.SectorID == request.SectorID && r.ID == request.ID {
+			if request.Status == "DONE" {
+				exists = true
+				continue
+			}
+			filtered = append(filtered, request)
+			exists = true
+		} else {
+			filtered = append(filtered, r)
+		}
+	}
+
+	if !exists && request.Status != "DONE" {
+		filtered = append(filtered, request)
+	}
+
+	outFile, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	encoder := json.NewEncoder(outFile)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(filtered)
 }
 
 func listenDrones(port string, path string) {
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		fmt.Println("Erro ao iniciar porta dos drones:", err)
+		fmt.Println("Erro ao iniciar porta dos drones: ", err)
 		return
 	}
 	defer listener.Close()
 
-	fmt.Println("Servidor recebendo drones na porta", port)
+	fmt.Println("Servidor inicializado (drone)")
 
 	for {
 		conn, err := listener.Accept()
@@ -173,21 +233,15 @@ func listenDrones(port string, path string) {
 
 		go func(conn net.Conn) {
 			defer conn.Close()
-
 			var drone Drone
 
 			if err := json.NewDecoder(conn).Decode(&drone); err != nil {
-				fmt.Println("Erro ao receber drone:", err)
 				return
 			}
 
 			mu.Lock()
-			err := saveDrone(path, drone)
+			_ = saveDrone(path, drone)
 			mu.Unlock()
-
-			if err != nil {
-				fmt.Println("Erro ao salvar drone:", err)
-			}
 		}(conn)
 	}
 }
@@ -200,7 +254,7 @@ func listenSectors(port string, path string) {
 	}
 	defer listener.Close()
 
-	fmt.Println("Servidor recebendo setores na porta", port)
+	fmt.Println("Servidor inicializado (setor)")
 
 	for {
 		conn, err := listener.Accept()
@@ -210,21 +264,13 @@ func listenSectors(port string, path string) {
 
 		go func(conn net.Conn) {
 			defer conn.Close()
-
 			var sector Sector
-
 			if err := json.NewDecoder(conn).Decode(&sector); err != nil {
-				fmt.Println("Erro ao receber setor:", err)
 				return
 			}
-
 			mu.Lock()
-			err := saveSector(path, sector)
+			_ = saveSector(path, sector)
 			mu.Unlock()
-
-			if err != nil {
-				fmt.Println("Erro ao salvar setor:", err)
-			}
 		}(conn)
 	}
 }
@@ -237,7 +283,7 @@ func listenSensors(port string, path string) {
 	}
 	defer listener.Close()
 
-	fmt.Println("Servidor recebendo sensores na porta", port)
+	fmt.Println("Servidor inicializado (sensor)")
 
 	for {
 		conn, err := listener.Accept()
@@ -247,21 +293,13 @@ func listenSensors(port string, path string) {
 
 		go func(conn net.Conn) {
 			defer conn.Close()
-
 			var sensor Sensor
-
 			if err := json.NewDecoder(conn).Decode(&sensor); err != nil {
-				fmt.Println("Erro ao receber sensor:", err)
 				return
 			}
-
 			mu.Lock()
-			err := saveSensor(path, sensor)
+			_ = saveSensor(path, sensor)
 			mu.Unlock()
-
-			if err != nil {
-				fmt.Println("Erro ao salvar sensor:", err)
-			}
 		}(conn)
 	}
 }
@@ -274,7 +312,7 @@ func listenRequests(port string, path string) {
 	}
 	defer listener.Close()
 
-	fmt.Println("Servidor recebendo requisições na porta", port)
+	fmt.Println("Servidor inicializado (requisição)")
 
 	for {
 		conn, err := listener.Accept()
@@ -284,71 +322,18 @@ func listenRequests(port string, path string) {
 
 		go func(conn net.Conn) {
 			defer conn.Close()
-
 			var request Request
-
 			if err := json.NewDecoder(conn).Decode(&request); err != nil {
-				fmt.Println("Erro ao receber requisição:", err)
 				return
 			}
-
 			mu.Lock()
-			err := saveRequest(path, request)
+			_ = saveRequest(path, request)
 			mu.Unlock()
-
-			if err != nil {
-				fmt.Println("Erro ao salvar requisição:", err)
-			}
 		}(conn)
 	}
 }
 
-func saveRequest(path string, request Request) error {
-	var list []Request
-
-	file, err := os.Open(path)
-	if err == nil {
-		_ = json.NewDecoder(file).Decode(&list)
-		_ = file.Close()
-	}
-
-	var filtered []Request
-	exists := false
-
-	// Filtra a lista
-	for i := range list {
-		if list[i].SectorID == request.SectorID && list[i].ID == request.ID {
-			// Se o status for DONE, simplesmente não adicionamos à filtered (removemos)
-			if request.Status == "DONE" {
-				exists = true
-				continue
-			}
-
-			// Se não for DONE, atualizamos
-			list[i] = request
-			filtered = append(filtered, list[i])
-			exists = true
-		} else {
-			filtered = append(filtered, list[i])
-		}
-	}
-
-	// Se for nova e não for DONE, adiciona
-	if !exists && request.Status != "DONE" {
-		filtered = append(filtered, request)
-	}
-
-	output, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer output.Close()
-
-	encoder := json.NewEncoder(output)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(filtered)
-}
+// == LOAD DATA
 
 func loadInterfacePorts(path string) (string, string, string, string, error) {
 	file, err := os.Open(path)
@@ -378,9 +363,10 @@ func clearFile(path string) {
 		return
 	}
 	defer file.Close()
-
 	_, _ = file.WriteString("[]")
 }
+
+// == MAIN
 
 func main() {
 	clearFile("../data/interface/drones.json")
