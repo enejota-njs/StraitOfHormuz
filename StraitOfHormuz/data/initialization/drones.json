@@ -1,12 +1,12 @@
 [
   {
     "id": 1,
-    "address_for_sector": "172.16.201.12:5012",
-    "address_for_drone": "172.16.201.12:5013"
+    "address_for_sector": "drone-soh:5012",
+    "address_for_drone": "drone-soh:5013"
   },
   {
     "id": 2,
-    "address_for_sector": "172.16.201.12:5014",
-    "address_for_drone": "172.16.201.12:5015"
+    "address_for_sector": "drone-soh:5014",
+    "address_for_drone": "drone-soh:5015"
   }
 ]

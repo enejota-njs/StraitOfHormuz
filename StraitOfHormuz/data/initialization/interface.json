@@ -1,8 +1,8 @@
 [
   {
-    "sectors" : "172.16.201.12:9001",
-    "drones" : "172.16.201.12:9002",
-    "sensors" : "172.16.201.12:9003",
-    "requests": "172.16.201.12:9004"
+    "sectors" : "interface-soh:9001",
+    "drones" : "interface-soh:9002",
+    "sensors" : "interface-soh:9003",
+    "requests": "interface-soh:9004"
   }
 ]
