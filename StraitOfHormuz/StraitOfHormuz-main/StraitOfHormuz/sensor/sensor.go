@@ -204,9 +204,9 @@ func main() {
 		return
 	}
 
-	sensorsPath := "../data/initialization/sensors.json"
-	sectorsPath := "../data/initialization/sectors.json"
-	intefacePath := "../data/initialization/interface.json"
+	sensorsPath := "data/initialization/sensors.json"
+	sectorsPath := "data/initialization/sectors.json"
+	intefacePath := "data/initialization/interface.json"
 
 	if !register(sensorsPath) {
 		fmt.Println("Erro ao registrar sensor")

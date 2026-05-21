@@ -5,12 +5,12 @@ MARGIN = 40
 SCALE = 4
 SIDEBAR_WIDTH = 300
 
-SECTORS_PATH = "../data/interface/sectors.json"
-DRONES_PATH = "../data/interface/drones.json"
-SENSORS_PATH = "../data/interface/sensors.json"
-REQUESTS_PATH = "../data/interface/requests.json"
+SECTORS_PATH = "data/interface/sectors.json"
+DRONES_PATH = "data/interface/drones.json"
+SENSORS_PATH = "data/interface/sensors.json"
+REQUESTS_PATH = "data/interface/requests.json"
 
-DRONE_IMAGE_PATH = "../data/images/drone.webp"
+DRONE_IMAGE_PATH = "data/images/drone.webp"
 
 
 def load_list(path):

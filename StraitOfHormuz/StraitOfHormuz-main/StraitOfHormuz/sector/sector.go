@@ -159,7 +159,7 @@ func sendRequest(sensor Sensor) {
 
 	addRequestToQueue(request)
 
-	go sendRequestToInterface("../data/initialization/interface.json", request)
+	go sendRequestToInterface("data/initialization/interface.json", request)
 
 	message := Message{
 		Text:    "REQUEST",
@@ -259,7 +259,7 @@ func handleDroneCrash(crashedDroneID int) {
 			pendingRequest := requests[i]
 
 			go sendRequestToInterface(
-				"../data/initialization/interface.json",
+				"data/initialization/interface.json",
 				pendingRequest,
 			)
 		}
@@ -649,9 +649,9 @@ func main() {
 		return
 	}
 
-	sectorsPath := "../data/initialization/sectors.json"
-	dronesPath := "../data/initialization/drones.json"
-	intefacePath := "../data/initialization/interface.json"
+	sectorsPath := "data/initialization/sectors.json"
+	dronesPath := "data/initialization/drones.json"
+	intefacePath := "data/initialization/interface.json"
 
 	if loadSectors(sectorsPath, id) != nil {
 		return

@@ -369,12 +369,12 @@ func clearFile(path string) {
 // == MAIN
 
 func main() {
-	clearFile("../data/interface/drones.json")
-	clearFile("../data/interface/sectors.json")
-	clearFile("../data/interface/sensors.json")
-	clearFile("../data/interface/requests.json")
+	clearFile("data/interface/drones.json")
+	clearFile("data/interface/sectors.json")
+	clearFile("data/interface/sensors.json")
+	clearFile("data/interface/requests.json")
 
-	interfacePath := "../data/initialization/interface.json"
+	interfacePath := "data/initialization/interface.json"
 
 	sectorsPort, dronesPort, sensorsPort, requestsPort, err := loadInterfacePorts(interfacePath)
 	if err != nil {
@@ -387,10 +387,10 @@ func main() {
 	_, sensorsPort, _ = net.SplitHostPort(sensorsPort)
 	_, requestsPort, _ = net.SplitHostPort(requestsPort)
 
-	go listenDrones(dronesPort, "../data/interface/drones.json")
-	go listenSectors(sectorsPort, "../data/interface/sectors.json")
-	go listenSensors(sensorsPort, "../data/interface/sensors.json")
-	go listenRequests(requestsPort, "../data/interface/requests.json")
+	go listenDrones(dronesPort, "data/interface/drones.json")
+	go listenSectors(sectorsPort, "data/interface/sectors.json")
+	go listenSensors(sensorsPort, "data/interface/sensors.json")
+	go listenRequests(requestsPort, "data/interface/requests.json")
 
 	select {}
 }

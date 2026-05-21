@@ -198,7 +198,7 @@ func handleDroneCrash(crashedDroneID int) {
 		return
 	}
 
-	go sendDeadDroneToInterface("../data/initialization/interface.json", deadDrone)
+	go sendDeadDroneToInterface("data/initialization/interface.json", deadDrone)
 
 	for i := range requests {
 		if requests[i].Status == "ATTENDING" && requests[i].AttendingDroneID == crashedDroneID {
@@ -208,7 +208,7 @@ func handleDroneCrash(crashedDroneID int) {
 			pendingRequest := requests[i]
 
 			go sendRequestToInterface(
-				"../data/initialization/interface.json",
+				"data/initialization/interface.json",
 				pendingRequest,
 			)
 
@@ -334,7 +334,7 @@ func markRequestAsPending(request Request) {
 	request.Status = "PENDING"
 	request.AttendingDroneID = 0
 
-	go sendRequestToInterface("../data/initialization/interface.json", request)
+	go sendRequestToInterface("data/initialization/interface.json", request)
 }
 
 func markRequestAsAttending(request Request, attendingDrone Drone) {
@@ -364,7 +364,7 @@ func markRequestAsAttending(request Request, attendingDrone Drone) {
 	}
 
 	request.Status = "ATTENDING"
-	go sendRequestToInterface("../data/initialization/interface.json", request)
+	go sendRequestToInterface("data/initialization/interface.json", request)
 }
 
 func removeRequestDone(request Request, finishedDrone Drone) {
@@ -400,7 +400,7 @@ func removeRequestDone(request Request, finishedDrone Drone) {
 	}
 
 	request.Status = "DONE"
-	go sendRequestToInterface("../data/initialization/interface.json", request)
+	go sendRequestToInterface("data/initialization/interface.json", request)
 }
 
 func dispatchRequests() {
@@ -829,9 +829,9 @@ func main() {
 		return
 	}
 
-	dronesPath := "../data/initialization/drones.json"
-	sectorsPath := "../data/initialization/sectors.json"
-	intefacePath := "../data/initialization/interface.json"
+	dronesPath := "data/initialization/drones.json"
+	sectorsPath := "data/initialization/sectors.json"
+	intefacePath := "data/initialization/interface.json"
 
 	if loadDrones(dronesPath, id) != nil {
 		return
