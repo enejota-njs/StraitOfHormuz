@@ -1,8 +1,8 @@
 [
   {
-    "sectors" : "localhost:9001",
-    "drones" : "localhost:9002",
-    "sensors" : "localhost:9003",
-    "requests": "localhost:9004"
+    "sectors" : "172.16.201.12:9001",
+    "drones" : "172.16.201.12:9002",
+    "sensors" : "172.16.201.12:9003",
+    "requests": "172.16.201.12:9004"
   }
 ]

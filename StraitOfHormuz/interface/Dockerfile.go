@@ -5,7 +5,8 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY ./interface.go ./
+COPY ./interface/interface.go ./interface.go
+
 RUN CGO_ENABLED=0 GOOS=linux go build -o interface_bin interface.go
 
 FROM alpine:latest

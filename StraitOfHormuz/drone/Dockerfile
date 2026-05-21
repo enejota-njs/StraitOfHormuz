@@ -5,7 +5,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY ./drone.go ./
+COPY ./drone/drone.go ./drone.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o drone_bin drone.go
 
 FROM alpine:latest

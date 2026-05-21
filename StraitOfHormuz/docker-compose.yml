@@ -3,40 +3,45 @@ version: "3.8"
 services:
   sector:
     build:
-      context: ./sector
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./sector/Dockerfile
+    container_name: sector-soh
     command: ["./sector_bin", "${ID}"]
     volumes:
       - ./data:/app/data
 
   drone:
     build:
-      context: ./drone
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./drone/Dockerfile
+    container_name: drone-soh
     command: ["./drone_bin", "${ID}"]
     volumes:
       - ./data:/app/data
 
   sensor:
     build:
-      context: ./sensor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./sensor/Dockerfile
+    container_name: sensor-soh
     command: ["./sensor_bin", "${ID}"]
     volumes:
       - ./data:/app/data
 
   interface-server:
     build:
-      context: ./interface
-      dockerfile: Dockerfile.go
+      context: .
+      dockerfile: ./interface/Dockerfile.go
+    container_name: interface-soh
     command: ["./interface_bin"]
     volumes:
       - ./data:/app/data
 
   interface-gui:
     build:
-      context: ./interface
-      dockerfile: Dockerfile.py
+      context: .
+      dockerfile: ./interface/Dockerfile.py
+    container_name: interface-gui-soh
     command: ["python3", "interface.py"]
     volumes:
       - ./data:/app/data
