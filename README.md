@@ -120,7 +120,7 @@ Para atender aos requisitos de coordenação distribuída e priorização sob co
 Quando há múltiplos drones disponíveis, o sistema considera a **distância** entre a posição atual do drone `(x, y)` e a posição da requisição `(x, y)` para favorecer o atendimento mais eficiente (menor tempo estimado de deslocamento).  
 Na prática, isso reduz tempo de resposta e evita desperdício operacional.
 
-> Observação: a distância pode ser calculada por **Euclidiana**. O projeto adota uma métrica determinística para que todos os nós cheguem à mesma escolha quando necessário.
+> Observação: A métrica adotada neste projeto é a distância Euclidiana, por ser simples e determinística.
 
 ### Relógio lógico de Lamport
 
