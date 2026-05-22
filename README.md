@@ -4,158 +4,239 @@
 
 ---
 
-<h6 align="center"> 
+<h3 align="center"> 
  Infraestrutura Distribuída para Coordenação de Drones Autônomos de Monitoramento Marítimo
-</h6>
+</h3>
 
 ---
 
 <details>
-  <summary><h2> Descrição do Projeto</h2></summary>
+  <summary><h2>Descrição do Projeto</h2></summary>
 
-O projeto **A Rota Das Coisas** é um sistema distribuído desenvolvido em **Go (Golang)** que atua como um **Middleware de Integração IoT**. Ele foi projetado para resolver o problema de alto acoplamento e gargalos de rede em ecossistemas de Internet das Coisas (IoT). 
+O projeto **Monitoramento Distribuído no Estreito de Ormuz** é um sistema distribuído desenvolvido em **Go (Golang)** (com uma interface de visualização em **Python/Pygame**) para coordenar uma **frota compartilhada de drones autônomos** em um ambiente com **comunicação instável**, **alto volume de eventos simultâneos** e possibilidade de **falha de nós**.
 
-A solução atua como um intermediário inteligente, desacoplando quem produz a informação (dispositivos físicos como sensores) de quem a consome (aplicações cliente. Ele recebe dados simultâneos, gerencia o estado global, aplica regras automáticas de negócio e repassa comandos críticos de forma otimizada.
+A área operacional é dividida em **setores marítimos**, cada um operado por um **broker de setor** (`sector.go`) responsável por receber eventos de **sensores** (`sensor.go`), manter e propagar uma **fila distribuída de requisições**, e interagir com os **drones** (`drone.go`) que executam as missões de atendimento.
+
+A solução foi projetada para atender aos requisitos principais do cenário: **priorizar ocorrências críticas e/ou mais antigas**, garantir que **um mesmo drone nunca seja reservado para mais de uma requisição ao mesmo tempo**, evitar **duplicidade de atendimento** (dois drones para a mesma requisição) e permitir **replanejamento automático** quando um drone falha ou perde conectividade, mantendo o sistema operando **sem servidor central e sem ponto único de falha**.
 
 </details>
 
 ---
 
 <details>
-  <summary><h2> Contexto e Problema</h2></summary>
+  <summary><h2>Contexto e Problema</h2></summary>
 
-Em arquiteturas IoT tradicionais (ponto-a-ponto), dispositivos físicos com recursos limitados de processamento e memória precisam gerenciar conexões diretas com múltiplas aplicações simultaneamente. Se um cliente deseja apresentar dados de um sensor em um painel, gravar em um banco e acionar um alarme, o sensor precisa cuidar de todas essas conexões. Isso gera sobrecarga, lentidão e travamentos.
+Devido à instabilidade no **Estreito de Ormuz**, uma operação multinacional passou a depender de uma infraestrutura tecnológica capaz de **monitorar rotas marítimas** e **acompanhar comboios civis** com segurança operacional. Nesse cenário, a comunicação é **intermitente**, há **múltiplos eventos simultâneos**, e equipamentos podem ser **destruídos** ou **perder conectividade** a qualquer momento.
 
-Além disso, aplicações diferentes apresentam necessidades de tráfego diferentes que sistemas convencionais não distinguem:
-1. **Telemetria (Sensores):** Leituras contínuas (ex: temperatura) geradas a cada milissegundo. A velocidade da rede é crucial.
-2. **Controle (Atuadores):** Comandos esporádicos (ex: "desligar caldeira"). São ações críticas que não podem ser perdidas ou corrompidas na rede sob nenhuma hipótese.
+Para suportar a operação de forma distribuída, a área do estreito é dividida em **setores marítimos**, cada um gerenciado por um **broker de setor**. Sensores (radares, boias, etc.) geram ocorrências dentro desses setores, e uma **frota compartilhada de drones autônomos** deve ser alocada para atender as requisições críticas, como inspeção visual, identificação de obstáculos e replanejamento de tráfego.
 
-</details>
+O problema central é garantir que o despacho de drones continue correto e consistente mesmo com concorrência e falhas. Em particular, a solução deve:
 
----
-
-<details>
-  <summary><h2> Arquitetura e Decisões de Design</h2></summary>
-
-Por questões comerciais do projeto, não foi utilizado nenhum framework (como MQTT). Toda a comunicação e roteamento foram implementados através da arquitetura nativa da internet (Sockets).
-
-- **Sensores (Telemetria via UDP - Porta 7000):** Utilizam o protocolo UDP. Como geram um imenso volume de dados a cada milissegundo, o UDP garante a velocidade necessária de entrega, aceitando perdas ocasionais sem travar o dispositivo de hardware.
-- **Atuadores (Controle via TCP - Porta 9000):** Utilizam o protocolo TCP. Como comandos de controle são ações críticas, o TCP estabelece uma conexão confiável que garante a integridade e a confirmação de entrega da mensagem.
-- **Aplicações Cliente (TCP - Porta 8000):** Utilizam TCP para garantir uma comunicação estável e bidirecional com o servidor, permitindo listar dados em tempo real e enviar comandos de controle.
-- **Servidor de Integração (Middleware):** Centraliza as comunicações utilizando *Goroutines* para lidar com múltiplos clientes ao mesmo tempo e *Mutexes* para garantir a segurança no acesso e escrita da memória.
+1. **Priorizar a liberação de drones** para ocorrências **mais críticas** e/ou para o setor que **solicitou primeiro**  
+2. **Garantir exclusão mútua distribuída**, de forma que **um mesmo drone nunca seja reservado ou despachado** para mais de uma ocorrência ao mesmo tempo  
+3. **Evitar duplicidade de cobertura**, garantindo que **não sejam enviados dois drones** para atender a **mesma requisição/área**  
+4. Manter requisições em uma **fila distribuída**, permitindo **replanejamento automático** quando não há drones disponíveis e quando um drone falha, é abatido ou perde conectividade  
+5. Operar **sem qualquer servidor central**, evitando **ponto único de falha**: a queda de um broker de setor não deve interromper o funcionamento dos demais setores nem o despacho de drones em outras regiões
 
 </details>
 
 ---
 
 <details>
-  <summary><h2> Cenário</h2></summary>
+  <summary><h2>Arquitetura e Decisões de Design</h2></summary>
 
-Para ilustrar a aplicação prática do middleware, o sistema desenvolvido simula o ecossistema de um **galpão industrial inteligente**. Neste ambiente, o armazenamento de produtos e a segurança do local exigem monitoramento contínuo e respostas automatizadas sem travamentos na rede.
+A solução foi implementada sem frameworks de mensageria (ex.: MQTT, Kafka, RabbitMQ). Toda a comunicação foi construída diretamente sobre a arquitetura nativa da Internet utilizando **sockets TCP** e mensagens **JSON**, priorizando simplicidade, portabilidade e facilidade de depuração em ambiente distribuído com Docker.
 
-O espaço é equipado com cinco frentes de atuação integradas pelo nosso servidor central:
+### Componentes
 
-1. **Sensor de Luminosidade** monitora a luz natural. Ao escurecer, acende automaticamente a **Lâmpada** do galpão.
-2. **Sensor de Umidade** evita que o ar fique seco demais, acionando o **Umidificador** para proteger materiais sensíveis.
-3. **Sensor de Temperatura** atua em conjunto com o **Ar Condicionado** para resfriar o ambiente e evitar o superaquecimento de máquinas e mercadorias.
-4. **Sensor de Fumaça** atua como vigilante de segurança, disparando os **Sprinklers** (chuveiros de teto) de forma imediata ao detectar princípios de incêndio.
-5. **Sensor de Gás** detecta vazamentos tóxicos ou inflamáveis, ligando rapidamente o **Exaustor** para sugar o ar contaminado e ventilar o prédio.
+- **Broker de Setor (`sector.go`)**  
+  Responsável por:
+  - Receber eventos de **sensores** do seu setor
+  - Criar e manter a **fila local de requisições**
+  - Propagar requisições para **outros setores** e para **drones**
+  - Receber atualizações de estado dos drones (ex.: `ATTENDING`, `DONE`)
+  - Detectar falhas de drones e **replanejar** requisições quando necessário
 
-Neste cenário, o Servidor (Middleware) atua como o **cérebro do galpão**. Ele processa o alto volume de dados dos sensores e aciona os equipamentos físicos em frações de segundo, de forma totalmente autônoma. Simultaneamente, o cliente da operação pode acompanhar o status de todo o galpão e assumir o controle manual através da **Aplicação Cliente (CLI)**.
+- **Drone (`drone.go`)**  
+  Responsável por:
+  - Receber e sincronizar a fila de requisições
+  - Participar do mecanismo de **coordenação** para selecionar/assumir requisições
+  - Coordenar-se com **outros drones via comunicação P2P** para evitar conflitos de alocação
+  - Reportar mudanças de estado ao setor (ex.: iniciou atendimento, concluiu missão)
+  - Manter publicação periódica do seu estado para observabilidade
+
+- **Sensor (`sensor.go`)**  
+  Responsável por:
+  - Carregar sua configuração e identificar o setor correspondente pela posição `(x, y)`
+  - Gerar eventos de forma **autônoma e aleatória** (simulação de carga)
+  - Enviar leituras para o broker do setor responsável
+
+- **Interface / Observabilidade (`interface.go` + `interface.py`)**  
+  Responsável por:
+  - Receber estados de **setores**, **drones**, **sensores** e **requisições**
+  - Persistir snapshots em JSON (`data/interface/*.json`)
+  - Exibir uma visualização em tempo real com **Python/Pygame**  
+  **Observação:** a Interface é um componente de monitoramento e não participa da coordenação do sistema (não é usada como controle nem como ponto único de decisão)
+
+### Estilo Arquitetural
+
+O sistema segue um estilo **distribuído e descentralizado**, combinando:
+- **Brokers distribuídos por setor** (cada setor é autônomo)
+- Comunicação **peer-to-peer** entre os principais componentes
+
+Principais canais P2P:
+
+- **Setor ↔ Setor (P2P):** brokers se comunicam diretamente para propagar e sincronizar requisições  
+- **Drone ↔ Setor (P2P):** drones recebem requisições/sincronizam fila e enviam atualizações de estado  
+- **Drone ↔ Drone (P2P):** drones se comunicam diretamente para coordenar reservas/atendimentos e evitar que o mesmo drone ou a mesma requisição sejam assumidos de forma concorrente  
+- **Sensor → Setor:** sensores enviam eventos para o broker responsável pela sua posição
+
+### Tolerância a falhas e replanejamento
+
+O sistema incorpora replanejamento automático para falhas de drones:
+
+- Quando um **drone falha**, perde conectividade ou é abatido, o broker do setor ou outros drones detectam a ausência e **remove o vínculo** entre o drone e a requisição  
+- A requisição que estava em estado **`ATTENDING`** volta para **`PENDING`** e **retorna para a fila distribuída**  
+- Em seguida, **outro drone disponível** pode assumir automaticamente essa requisição, respeitando as regras de prioridade e ordenação
+
+### Ausência de ponto único de falha
+
+A coordenação operacional (fila, despacho e replanejamento) ocorre entre **setores e drones**, sem um servidor central responsável por decisões globais.
+
+- Se um **broker de setor** falhar, os **demais setores** continuam recebendo eventos dos seus sensores e mantendo o despacho de drones na sua área  
+- A Interface existe apenas para visualização; a falha dela não interrompe o despacho, apenas a visualização e persistência de snapshots
 
 </details>
 
 ---
 
 <details>
-  <summary><h2> Funcionalidades e Automação</h2></summary>
+  <summary><h2>Guia de Uso: Executando com Docker</h2></summary>
 
-- **Dispositivos Virtuais Simulados:** Sensores e atuadores rodam como processos em contêineres independentes, emulando perfeitamente o comportamento de um hardware real na rede.
-- **Monitoramento em Tempo Real:** O cliente possui uma CLI (Interface de Linha de Comando) interativa que permite ao usuário listar e verificar todos os dispositivos ou monitorar um em específico.
-- **Controle Automático:** O servidor monitora constantemente os valores recebidos e liga/desliga atuadores compatíveis automaticamente caso os limites sejam ultrapassados.
-- **Controle Manual Temporário:** O usuário pode assumir o controle e enviar comandos diretos para um atuador. Quando isso ocorre, o servidor bloqueia a automação daquele atuador temporariamente para respeitar a decisão manual do usuário.
+Atendendo às restrições do projeto, o sistema foi projetado para rodar em **contêineres Docker**, permitindo executar **múltiplas instâncias isoladas** (setores, drones, sensores e interface) de forma padronizada e reproduzível.
 
-### Regras de Automação Implementadas
+O repositório já inclui um `docker-compose.yml` com os serviços abaixo:
 
-| Sensor | Atuador Compatível | Condição para Ligar (ON) | Condição para Desligar (OFF) |
-| :--- | :--- | :--- | :--- |
-| **Luminosidade** | Lâmpada | Valor < 200 lux | Valor > 300 lux |
-| **Umidade** | Umidificador | Valor < 45 % | Valor > 55 % |
-| **Temperatura** | Ar Condicionado | Valor > 25 °C | Valor < 20 °C |
-| **Fumaça** | Sprinkler | Valor > 150 ppm | Valor < 80 ppm |
-| **Gás** | Exaustor | Valor > 300 ppm | Valor < 150 ppm |
-
-</details>
+- `sector1`, `sector2`, `sector3`, `sector4` (brokers de setor)
+- `drone1`, `drone2` (drones)
+- `sensor1`, `sensor2`, `sensor3`, `sensor4` (sensores)
+- `interface-server` (coletor/servidor da interface em Go)
+- `interface-gui` (painel em Python/Pygame)
 
 ---
 
-<details>
-  <summary><h2> Guia de Uso: Executando com Docker</h2></summary>
+## 1. Construindo as imagens
 
-Atendendo às restrições do projeto, o sistema foi projetado para rodar em contêineres Docker, permitindo a execução de múltiplas instâncias isoladas no laboratório de forma fácil e padronizada. O projeto já conta com um `docker-compose.yml` pré-configurado.
+Para construir todas as imagens:
 
-### 1. Construindo as imagens
-
-Você pode construir todas as imagens do sistema de uma só vez utilizando:
 ```bash
 docker compose build
 ```
 
-Ou, se preferir, pode compilar de forma individual cada componente:
+Se preferir construir por componente:
+
 ```bash
-# Core
-docker compose build server               # Servidor
-docker compose build client               # Cliente CLI
-
-# Sensores
-docker compose build gas                  # Gás
-docker compose build humidity             # Umidade
-docker compose build luminosity           # Luminosidade
-docker compose build smoke                # Fumaça
-docker compose build temperature          # Temperatura
-
-# Atuadores
-docker compose build air_conditioner      # Ar Condicionado
-docker compose build exhaust_fan          # Exaustor
-docker compose build humidifier           # Umidificador
-docker compose build light                # Lâmpada
-docker compose build sprinkler            # Sprinkler
+docker compose build sector1 sector2 sector3 sector4
+docker compose build drone1 drone2
+docker compose build sensor1 sensor2 sensor3 sensor4
+docker compose build interface-server interface-gui
 ```
 
-### 2. Executando o Ecossistema
+---
 
-**Iniciar o Servidor:**
+## 2. Executando o ecossistema
+
+Para subir tudo:
+
 ```bash
-docker compose up server
+docker compose up
 ```
 
-**Iniciar os Sensores (Terminal Interativo):**
+Para subir apenas alguns serviços:
+
 ```bash
-docker compose run --rm <nome_do_sensor> ./sensor_bin <IP do servidor>
+docker compose up interface-server interface-gui
+docker compose up sector1 sector2 sector3 sector4
+docker compose up drone1 drone2
+docker compose up sensor1 sensor2 sensor3 sensor4
 ```
 
-**Iniciar os Atuadores (Terminal Interativo):**
+> Dica: se você quiser acompanhar logs separados, suba grupos em terminais diferentes.
+
+---
+
+## 3. Acessando o painel (interface-gui)
+
+Antes de rodar, em Linux, habilite o acesso do Docker ao servidor X:
+
 ```bash
-docker compose run --rm <nome_do_atuador> ./actuator_bin <IP do servidor>
+xhost +local:
 ```
 
-**Iniciar a Aplicação Cliente (Terminal Interativo):**
+Depois suba a interface:
+
 ```bash
-docker compose run --rm client ./client_bin <IP do servidor>
+docker compose up interface-server interface-gui
 ```
+
+---
+
+## 4. Portas expostas (mapeamento)
+
+O `docker-compose.yml` expõe portas para facilitar testes e execução distribuída:
+
+- **Setores**
+  - `sector1`: `5000`, `5001`, `5002`
+  - `sector2`: `5003`, `5004`, `5005`
+  - `sector3`: `5006`, `5007`, `5008`
+  - `sector4`: `5009`, `5010`, `5011`
+
+- **Drones**
+  - `drone1`: `5012`, `5013`
+  - `drone2`: `5014`, `5015`
+
+- **Interface (Go)**
+  - `interface-server`: `9001`, `9002`, `9003`, `9004`
+
+> As portas específicas usadas na comunicação (sensor/setor/drone) são definidas nos arquivos JSON de inicialização em `data/initialization/`.
+
+---
+
+## 5. Execução em máquinas distintas (laboratório)
+
+Para rodar os contêineres em **computadores diferentes**, é necessário **ajustar os endereços (`host:port`)** nos arquivos de inicialização em `data/initialization/` (ex.: `sectors.json`, `drones.json`, `sensors.json`, `interface.json`) para refletir o **IP/hostname real de cada máquina** no laboratório.
+
+- Se um setor estiver em `10.0.0.21`, então `address_for_sensor`, `address_for_sector` e `address_for_drone` desse setor devem apontar para `10.0.0.21:<porta>` (e não para `localhost`)
+- O mesmo vale para drones e para a interface: cada componente deve anunciar/consumir um endereço que seja **alcançável pelos outros nós** na rede
+
+---
+
+## 6. Escalabilidade (adicionar quantos setores/drones/sensores quiser)
+
+O ecossistema foi modelado para permitir adicionar **quantos setores, drones e sensores forem necessários**. Para isso:
+
+1. Crie novas entradas nos arquivos JSON de inicialização em `data/initialization/*.json`
+2. Adicione novos serviços no `docker-compose.yml` (ex.: `sector5`, `drone3`, `sensor10`, etc.) apontando o comando para o novo ID
+3. Garanta que as **portas não colidam** e que os endereços estejam corretos na rede do laboratório
 
 </details>
 
 ---
 
 <details>
-  <summary><h2> Conclusão</h2></summary>
+  <summary><h2>Conclusão</h2></summary>
 
-O desenvolvimento do projeto "A Rota Das Coisas" cumpriu o desafio de construir um ecossistema IoT robusto e performático sem a dependência de frameworks de terceiros. A criação de um middleware customizado permitiu resolver o grave problema de alto acoplamento da arquitetura física, poupando a memória e o processamento dos dispositivos de hardware.
+O desenvolvimento do projeto **Monitoramento Distribuído no Estreito de Ormuz** cumpriu o desafio de construir uma infraestrutura **distribuída, descentralizada e tolerante a falhas** para coordenação de uma frota compartilhada de **drones autônomos**, operando sob **alta concorrência** e **comunicação instável**.
 
-A escolha estratégica e a separação dos protocolos de rede mostraram-se fundamentais para a solução do problema: o uso de **UDP** para sensores evitou o congestionamento da rede lidando de forma eficiente com o alto volume de telemetria contínua, enquanto o **TCP** garantiu a confiabilidade total exigida pelos comandos direcionados aos atuadores.
+A divisão da área em **setores marítimos** com **brokers de setor independentes**, aliada à comunicação **P2P**, elimina a dependência de um coordenador central e atende ao requisito de **ausência de ponto único de falha**: a queda de um setor não interrompe o funcionamento dos demais nem paralisa o despacho em outras regiões.
 
-Por fim, a integração completa com o **Docker** validou o requisito arquitetural.
+Do ponto de vista de consistência, a solução foi desenhada para:
+- **priorizar requisições críticas e/ou mais antigas**, garantindo ordenação mesmo sob atrasos
+- assegurar que **um mesmo drone nunca seja reservado/dispatchado para mais de uma ocorrência**
+- evitar **duplicidade de cobertura**, impedindo que duas unidades atendam a mesma requisição
+- manter requisições em **fila distribuída**, com **replanejamento automático** quando não há drones disponíveis ou quando um drone falha, permitindo que **outro drone assuma** a missão
+
+Por fim, a execução em **contêineres Docker** valida os requisitos de emulação realista no laboratório, possibilitando rodar múltiplos setores, drones e sensores de forma isolada e escalável, inclusive em **máquinas distintas** com ajuste de endereçamento.
 
 </details>
 
@@ -169,11 +250,3 @@ Por fim, a integração completa com o **Docker** validou o requisito arquitetur
 </details>
 
 ---
-
-<details>
-  <summary><h2> Referências</h2></summary>
-
-**Documentação Oficial da Linguagem Go (Golang)**. Disponível em: <br>
-<a href="https://go.dev/doc/" target="_blank">https://go.dev/doc/</a>
-
-</details>
