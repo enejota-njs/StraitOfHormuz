@@ -111,6 +111,94 @@ A coordenação operacional (fila, despacho e replanejamento) ocorre entre **set
 ---
 
 <details>
+  <summary><h2>Conceitos Utilizados</h2></summary>
+
+Para atender aos requisitos de coordenação distribuída e priorização sob comunicação instável, a solução utiliza dois conceitos centrais: **distância** (para escolha operacional do drone) e **relógio lógico de Lamport** (para ordenação consistente de eventos).
+
+### Distância (seleção de drone)
+
+Quando há múltiplos drones disponíveis, o sistema considera a **distância** entre a posição atual do drone `(x, y)` e a posição da requisição `(x, y)` para favorecer o atendimento mais eficiente (menor tempo estimado de deslocamento).  
+Na prática, isso reduz tempo de resposta e evita desperdício operacional.
+
+> Observação: a distância pode ser calculada por **Euclidiana**. O projeto adota uma métrica determinística para que todos os nós cheguem à mesma escolha quando necessário.
+
+### Relógio lógico de Lamport
+
+Cada requisição carrega um campo **`clock`**, que representa um **timestamp lógico** (Relógio de Lamport). Esse mecanismo permite que brokers e drones mantenham uma noção consistente de “quem aconteceu antes” mesmo sem relógio físico sincronizado entre máquinas.
+
+O relógio de Lamport é usado para garantir:
+
+- **Priorização por ordem de chegada**: requisições mais antigas (menor `clock`) devem ser atendidas primeiro
+- **Ordenação sob falhas e atrasos**: mesmo que mensagens cheguem fora de ordem devido à rede, o sistema consegue reordenar a fila
+- **Desempate determinístico**: em conjunto com criticidade e identificadores (ex.: `sector_id`, `origin_id`), o ordering se mantém estável
+
+Uma ordenação típica aplicada na fila é:
+
+1. **Críticas primeiro** (`is_critical = true`)
+2. **Menor `clock` primeiro** (mais antiga)
+3. Desempate por **`sector_id`** e **`origin_id`** para garantir consistência total
+
+Dessa forma, a alocação de drones respeita simultaneamente **prioridade** e **ordering distribuído**, mesmo quando setores estão em máquinas diferentes e a comunicação sofre atrasos.
+
+</details>
+
+---
+
+<details>
+  <summary><h2>Estrutura do Repositório</h2></summary>
+
+A seguir está uma visão geral da organização do projeto e dos principais arquivos/pastas.
+
+```text
+.
+├── docker-compose.yml
+├── sector/
+│   ├── Dockerfile
+│   └── sector.go
+├── drone/
+│   ├── Dockerfile
+│   └── drone.go
+├── sensor/
+│   ├── Dockerfile
+│   └── sensor.go
+├── interface/
+│   ├── Dockerfile.go
+│   ├── Dockerfile.py
+│   ├── interface.go
+│   └── interface.py
+└── data/
+    ├── initialization/
+    │   ├── sectors.json       # configuração dos setores (limites e endereços)
+    │   ├── drones.json        # configuração dos drones (IDs, posições e endereços)
+    │   ├── sensors.json       # configuração dos sensores (IDs, posições e tipos)
+    │   └── interface.json     # portas/endereço usados pelo coletor de observabilidade
+    ├── interface/
+    │   ├── sectors.json       # snapshot de setores (gerado pelo interface-server)
+    │   ├── drones.json        # snapshot de drones (gerado pelo interface-server)
+    │   ├── sensors.json       # snapshot de sensores (gerado pelo interface-server)
+    │   └── requests.json      # snapshot de requisições (gerado pelo interface-server)
+    └── images/
+        └── drone.webp         # sprite/ícone do drone usado na interface.py
+```
+
+### Pastas principais
+
+- **`sector/`**: contém o broker de setor, responsável por receber eventos de sensores, manter/propagar a fila de requisições e interagir com drones e outros setores.
+- **`drone/`**: contém o serviço do drone, que sincroniza fila, executa missões e coordena-se com outros drones.
+- **`sensor/`**: contém o simulador de sensor, que gera eventos aleatórios e envia para o setor responsável pela posição.
+- **`interface/`**: contém a observabilidade (servidor Go que grava JSON + GUI em Python/Pygame).
+
+### Arquivos de dados
+
+- **`data/initialization/*.json`**: arquivos de configuração (endereços, limites e IDs).  
+  **Atenção:** ao executar em máquinas distintas no laboratório, ajuste os campos `host:port` para o IP/hostname real de cada nó.
+- **`data/interface/*.json`**: arquivos de saída gerados pela `interface-server`, consumidos pela GUI para renderização em tempo real.
+
+</details>
+
+---
+
+<details>
   <summary><h2> Guia de Uso: Executando com Docker</h2></summary>
 
 Atendendo às restrições do projeto, o sistema foi projetado para rodar em **contêineres Docker**, permitindo executar **múltiplas instâncias isoladas** (setores, drones, sensores e interface) de forma padronizada e reproduzível.
