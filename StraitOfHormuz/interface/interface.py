@@ -13,6 +13,7 @@ REQUESTS_PATH = "data/interface/requests.json"
 DRONE_IMAGE_PATH = "data/images/drone.webp"
 
 
+# load_list Carrega uma lista a partir de um arquivo JSON e retorna lista vazia em caso de erro ou conteúdo nulo
 def load_list(path):
     try:
         with open(path, "r", encoding="utf-8") as file:
@@ -27,6 +28,7 @@ def load_list(path):
         return []
 
 
+# load_world Carrega o estado atual do sistema a partir dos arquivos de Interface
 def load_world():
     return {
         "sectors": load_list(SECTORS_PATH),
@@ -36,6 +38,7 @@ def load_world():
     }
 
 
+# get_world_limits Calcula os limites do mundo com base nos Setores para dimensionar a visualização
 def get_world_limits(sectors):
     if not sectors:
         return 0, 300, 0, 100
@@ -49,6 +52,7 @@ def get_world_limits(sectors):
     return min_x, max_x, min_y, max_y
 
 
+# get_screen_size Converte os limites do mundo em dimensões de janela, reservando uma barra lateral para a fila
 def get_screen_size(min_x, max_x, min_y, max_y):
     world_width = int((max_x - min_x) * SCALE + 2 * MARGIN)
     height = int((max_y - min_y) * SCALE + 2 * MARGIN)
@@ -57,6 +61,7 @@ def get_screen_size(min_x, max_x, min_y, max_y):
     return total_width, max(height, 400) # Garante uma altura mínima para o painel
 
 
+# world_to_screen Converte coordenadas do mundo em coordenadas de tela considerando margem, escala e eixo Y invertido
 def world_to_screen(x, y, min_x, max_y):
     screen_x = MARGIN + (x - min_x) * SCALE
     screen_y = MARGIN + (max_y - y) * SCALE
@@ -64,6 +69,7 @@ def world_to_screen(x, y, min_x, max_y):
     return int(screen_x), int(screen_y)
 
 
+# draw_sectors Desenha os retângulos dos Setores e seus identificadores
 def draw_sectors(screen, font, sectors, min_x, max_y):
     for sector in sectors:
         left, top = world_to_screen(sector["left"], sector["top"], min_x, max_y)
@@ -78,10 +84,12 @@ def draw_sectors(screen, font, sectors, min_x, max_y):
 
         pygame.draw.rect(screen, (60, 60, 60), rect, 2)
 
+        # Compatibilidade com chaves ID e id devido a diferenças de serialização
         text = font.render(f"Setor {sector.get('ID', sector.get('id', '?'))}", True, (200, 200, 200))
         screen.blit(text, (rect_left + 10, rect_top + 10))
 
 
+# draw_sensors Desenha os Sensores como pontos e adiciona um marcador textual
 def draw_sensors(screen, font, sensors, min_x, max_y):
     for sensor in sensors:
         x, y = world_to_screen(sensor["x"], sensor["y"], min_x, max_y)
@@ -95,6 +103,7 @@ def draw_sensors(screen, font, sensors, min_x, max_y):
         screen.blit(text, (x + 8, y - 8))
 
 
+# draw_drones Desenha os Drones na tela usando imagem quando disponível ou círculos como fallback
 def draw_drones(screen, font, drones, drone_image, min_x, max_y):
     for drone in drones:
         x, y = world_to_screen(drone["x"], drone["y"], min_x, max_y)
@@ -103,6 +112,7 @@ def draw_drones(screen, font, drones, drone_image, min_x, max_y):
             image_rect = drone_image.get_rect(center=(x, y))
             screen.blit(drone_image, image_rect)
         else:
+            # Cores diferentes indicam ocupado e livre quando imagem não está disponível
             color = (255, 100, 100) if drone.get("is_busy") else (100, 255, 100)
             pygame.draw.circle(screen, color, (x, y), 12)
 
@@ -110,6 +120,7 @@ def draw_drones(screen, font, drones, drone_image, min_x, max_y):
         screen.blit(text, (x + 14, y - 8))
 
 
+# draw_grid Desenha uma grade de referência no plano para facilitar leitura de posições
 def draw_grid(screen, font, min_x, max_x, min_y, max_y, width, height):
     start_x = int(min_x)
     end_x = int(max_x)
@@ -132,6 +143,7 @@ def draw_grid(screen, font, min_x, max_x, min_y, max_y, width, height):
         screen.blit(text, (5, sy - 8))
 
 
+# draw_requests_panel Renderiza a barra lateral com a fila de Requisições, priorizando críticas e ordenando por Clock
 def draw_requests_panel(screen, font, requests, width, height):
     panel_rect = pygame.Rect(width - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, height)
     pygame.draw.rect(screen, (30, 30, 35), panel_rect)
@@ -162,6 +174,7 @@ def draw_requests_panel(screen, font, requests, width, height):
         elif is_critical:
             color = (255, 100, 100)
 
+        # Tradução de estados para exibição amigável
         status_pt = {
             "ATTENDING": "ATENDENDO",
             "PENDING": "PENDENTE",
@@ -182,6 +195,7 @@ def draw_requests_panel(screen, font, requests, width, height):
             break
 
 
+# main Inicializa o Pygame, carrega o estado em loop e renderiza Setores, Sensores, Drones e a fila de Requisições
 def main():
     pygame.init()
 
@@ -220,6 +234,7 @@ def main():
         new_min_x, new_max_x, new_min_y, new_max_y = get_world_limits(sectors)
         new_width, new_height = get_screen_size(new_min_x, new_max_x, new_min_y, new_max_y)
 
+        # Ajusta dinamicamente a janela caso o mundo mude de tamanho
         if new_width != width or new_height != height:
             min_x = new_min_x
             max_x = new_max_x
