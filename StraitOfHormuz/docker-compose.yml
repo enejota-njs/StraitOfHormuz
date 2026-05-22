@@ -9,7 +9,7 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "5016:5016"
+      - "5016:5000"
       - "5001:5001"
       - "5002:5002"
 
