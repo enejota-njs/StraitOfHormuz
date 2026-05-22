@@ -11,7 +11,7 @@
 ---
 
 <details>
-  <summary><h2>Descrição do Projeto</h2></summary>
+  <summary><h2> Descrição do Projeto</h2></summary>
 
 O projeto **Monitoramento Distribuído no Estreito de Ormuz** é um sistema distribuído desenvolvido em **Go (Golang)** (com uma interface de visualização em **Python/Pygame**) para coordenar uma **frota compartilhada de drones autônomos** em um ambiente com **comunicação instável**, **alto volume de eventos simultâneos** e possibilidade de **falha de nós**.
 
@@ -24,7 +24,7 @@ A solução foi projetada para atender aos requisitos principais do cenário: **
 ---
 
 <details>
-  <summary><h2>Contexto e Problema</h2></summary>
+  <summary><h2> Contexto e Problema</h2></summary>
 
 Devido à instabilidade no **Estreito de Ormuz**, uma operação multinacional passou a depender de uma infraestrutura tecnológica capaz de **monitorar rotas marítimas** e **acompanhar comboios civis** com segurança operacional. Nesse cenário, a comunicação é **intermitente**, há **múltiplos eventos simultâneos**, e equipamentos podem ser **destruídos** ou **perder conectividade** a qualquer momento.
 
@@ -43,7 +43,7 @@ O problema central é garantir que o despacho de drones continue correto e consi
 ---
 
 <details>
-  <summary><h2>Arquitetura e Decisões de Design</h2></summary>
+  <summary><h2> Arquitetura e Decisões de Design</h2></summary>
 
 A solução foi implementada sem frameworks de mensageria (ex.: MQTT, Kafka, RabbitMQ). Toda a comunicação foi construída diretamente sobre a arquitetura nativa da Internet utilizando **sockets TCP** e mensagens **JSON**, priorizando simplicidade, portabilidade e facilidade de depuração em ambiente distribuído com Docker.
 
@@ -111,7 +111,7 @@ A coordenação operacional (fila, despacho e replanejamento) ocorre entre **set
 ---
 
 <details>
-  <summary><h2>Guia de Uso: Executando com Docker</h2></summary>
+  <summary><h2> Guia de Uso: Executando com Docker</h2></summary>
 
 Atendendo às restrições do projeto, o sistema foi projetado para rodar em **contêineres Docker**, permitindo executar **múltiplas instâncias isoladas** (setores, drones, sensores e interface) de forma padronizada e reproduzível.
 
@@ -224,7 +224,7 @@ O ecossistema foi modelado para permitir adicionar **quantos setores, drones e s
 ---
 
 <details>
-  <summary><h2>Conclusão</h2></summary>
+  <summary><h2> Conclusão</h2></summary>
 
 O desenvolvimento do projeto **Monitoramento Distribuído no Estreito de Ormuz** cumpriu o desafio de construir uma infraestrutura **distribuída, descentralizada e tolerante a falhas** para coordenação de uma frota compartilhada de **drones autônomos**, operando sob **alta concorrência** e **comunicação instável**.
 
